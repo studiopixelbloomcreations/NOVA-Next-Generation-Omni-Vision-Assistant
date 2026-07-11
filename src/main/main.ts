@@ -1,5 +1,5 @@
 import './env';
-import { app, BrowserWindow, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, ipcMain, screen, desktopCapturer } from 'electron';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
 import {
@@ -204,6 +204,17 @@ graphEngine.on('ready', () => {
 });
 
 app.whenReady().then(() => {
+  // Phase 2: Electron Hardware Lifecycle Bypass - Media Permission Handler
+  app.on('web-contents-created', (_event, contents) => {
+    contents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+      if (permission === 'media' || permission === 'mediaKeySystem') {
+        callback(true);
+      } else {
+        callback(false);
+      }
+    });
+  });
+
   createWindow();
   registerGeminiBridgeHandlers();
 
@@ -285,6 +296,42 @@ app.whenReady().then(() => {
     if (mainWindow) {
       mainWindow.setIgnoreMouseEvents(!makeVisible, { forward: true });
     }
+  });
+
+  // Vision chunk engine: Desktop capture handler
+  ipcMain.handle('capture-desktop-frame', async () => {
+    try {
+      const sources = await desktopCapturer.getSources({
+        types: ['screen'],
+        thumbnailSize: { width: 1280, height: 720 },
+      });
+      const primary = sources[0];
+      if (primary && primary.thumbnail) {
+        const base64 = primary.thumbnail.toDataURL().split(',')[1];
+        return { data: base64, mimeType: 'image/jpeg' };
+      }
+    } catch (e) {
+      console.error('[main] desktop capture failed:', e);
+    }
+    return null;
+  });
+
+  // Camera frame handler for renderer
+  ipcMain.on('camera-frame', (_event, base64Frame: string) => {
+    if (geminiLiveBridge.isConnected() && geminiLiveBridge.getConnectionState() === 'CONNECTED') {
+      geminiLiveBridge.sendVisionFrame(base64Frame);
+    }
+  });
+
+  // Camera permission handler
+  app.on('web-contents-created', (_event, contents) => {
+    contents.session.setPermissionRequestHandler((_wc, permission, callback) => {
+      if (['media', 'audioCapture', 'videoCapture', 'screenCopy'].includes(permission)) {
+        callback(true);
+      } else {
+        callback(false);
+      }
+    });
   });
 
   ipcMain.handle(NovaIpcChannel.TRIGGER_AUTOMATION, async (_event, commandText: string) => {

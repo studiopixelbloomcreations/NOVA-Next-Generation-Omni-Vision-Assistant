@@ -257,6 +257,22 @@ export class GeminiLiveBridge extends EventEmitter {
     this.safeSend(JSON.stringify(message), 'tool response');
   }
 
+  // Vision chunk engine: send camera/desktop frames as media chunks
+  public sendVisionFrame(base64Frame: string): void {
+    if (!this.ws || !this.connected || !this.sessionReady) return;
+
+    const message = {
+      realtimeInput: {
+        mediaChunks: [{
+          mimeType: 'image/jpeg',
+          data: base64Frame,
+        }],
+      },
+    };
+
+    this.safeSend(JSON.stringify(message), 'vision frame');
+  }
+
   /**
    * Flushes the downstream audio buffer. Returns the elapsed time (ms) of the
    * flush event dispatch itself — synchronous listener execution time, not any

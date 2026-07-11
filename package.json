@@ -13,6 +13,7 @@
   "build": {
     "appId": "com.nova.genesis",
     "productName": "Nova Genesis",
+    "asar": false,
     "directories": {
       "output": "dist_electron",
       "buildResources": "build"
@@ -33,8 +34,12 @@
     ],
     "win": {
       "target": [
-        "nsis",
-        "portable"
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
       ]
     }
   },
