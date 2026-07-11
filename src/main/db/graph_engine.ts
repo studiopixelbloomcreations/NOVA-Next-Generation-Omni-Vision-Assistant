@@ -1,95 +1,78 @@
 // src/main/db/graph_engine.ts
 import { EventEmitter } from 'events';
-import sqlite3 from 'sqlite3';
+import Database from 'better-sqlite3';
 import { join } from 'path';
 import { app } from 'electron';
 import { IKnowledgeNode, IKnowledgeEdge } from '../../shared/ipc_protocols';
 
-const sqlite = sqlite3.verbose();
-
 export class GraphEngine extends EventEmitter {
-  private initPromise: Promise<sqlite3.Database> | null = null;
+  private db: Database.Database | null = null;
+  private dbPath: string = '';
   private graphReady = false;
 
   constructor() {
     super();
     // Kick off initialization once Electron is ready; consumers either await
     // ensureDb() through the public API or listen for the 'ready' event.
-    void this.ensureDb().catch(() => {
-      // Already logged inside ensureDb; the next call retries.
-    });
+    if (app.isReady()) {
+      this.ensureDb();
+    } else {
+      app.whenReady().then(() => {
+        this.ensureDb();
+      });
+    }
   }
 
-  private ensureDb(): Promise<sqlite3.Database> {
-    if (this.initPromise) return this.initPromise;
+  private ensureDb(): Database.Database {
+    if (this.db) return this.db;
 
-    this.initPromise = (async () => {
-      if (!app.isReady()) {
-        await app.whenReady();
-      }
-      const dbPath = join(app.getPath('userData'), 'knowledge_graph.db');
+    if (!app.isReady()) {
+      throw new Error('Electron app not ready');
+    }
 
-      const db = await new Promise<sqlite3.Database>((resolve, reject) => {
-        const handle = new sqlite.Database(dbPath, (err) => {
-          if (err) reject(err);
-          else resolve(handle);
-        });
-      });
+    this.dbPath = join(app.getPath('userData'), 'knowledge_graph.db');
 
-      await new Promise<void>((resolve, reject) => {
-        db.exec(
-          `
-          PRAGMA journal_mode=WAL;
-          PRAGMA synchronous=NORMAL;
-          PRAGMA foreign_keys=ON;
-          PRAGMA temp_store=MEMORY;
-          PRAGMA cache_size=-32768;
+    this.db = new Database(this.dbPath);
 
-          CREATE TABLE IF NOT EXISTS graph_nodes (
-              node_id TEXT PRIMARY KEY NOT NULL,
-              node_type TEXT NOT NULL CHECK(node_type IN ('entity', 'concept', 'project', 'file', 'tool', 'session')),
-              display_name TEXT NOT NULL,
-              metadata_payload TEXT,
-              created_at INTEGER NOT NULL,
-              updated_at INTEGER NOT NULL
-          );
+    // Configure WAL mode and create schema with strict constraints
+    this.db.exec(`
+      PRAGMA journal_mode=WAL;
+      PRAGMA synchronous=NORMAL;
+      PRAGMA foreign_keys=ON;
+      PRAGMA temp_store=MEMORY;
+      PRAGMA cache_size=-32768;
 
-          CREATE TABLE IF NOT EXISTS graph_edges (
-              edge_id TEXT PRIMARY KEY NOT NULL,
-              source_node_id TEXT NOT NULL,
-              target_node_id TEXT NOT NULL,
-              edge_relationship TEXT NOT NULL CHECK(edge_relationship IN ('contains', 'references', 'depends_on', 'derived_from', 'related_to', 'created_by')),
-              edge_weight REAL NOT NULL DEFAULT 1.0 CHECK(edge_weight >= 0.0 AND edge_weight <= 1.0),
-              last_accessed_at INTEGER NOT NULL,
-              FOREIGN KEY(source_node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE,
-              FOREIGN KEY(target_node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE
-          );
+      CREATE TABLE IF NOT EXISTS graph_nodes (
+          node_id TEXT PRIMARY KEY NOT NULL,
+          node_type TEXT NOT NULL CHECK(node_type IN ('entity', 'concept', 'project', 'file', 'tool', 'session')),
+          display_name TEXT NOT NULL,
+          metadata_payload TEXT,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL
+      );
 
-          CREATE UNIQUE INDEX IF NOT EXISTS idx_edge_directional ON graph_edges(source_node_id, target_node_id, edge_relationship);
-          CREATE INDEX IF NOT EXISTS idx_edge_source ON graph_edges(source_node_id);
-          CREATE INDEX IF NOT EXISTS idx_edge_target ON graph_edges(target_node_id);
-          CREATE INDEX IF NOT EXISTS idx_node_type ON graph_nodes(node_type);
-          `,
-          (err) => {
-            if (err) reject(err);
-            else resolve();
-          }
-        );
-      });
+      CREATE TABLE IF NOT EXISTS graph_edges (
+          edge_id TEXT PRIMARY KEY NOT NULL,
+          source_node_id TEXT NOT NULL,
+          target_node_id TEXT NOT NULL,
+          edge_relationship TEXT NOT NULL CHECK(edge_relationship IN ('contains', 'references', 'depends_on', 'derived_from', 'related_to', 'created_by')),
+          edge_weight REAL NOT NULL DEFAULT 1.0 CHECK(edge_weight >= 0.0 AND edge_weight <= 1.0),
+          last_accessed_at INTEGER NOT NULL,
+          FOREIGN KEY(source_node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE,
+          FOREIGN KEY(target_node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE
+      );
 
-      if (!this.graphReady) {
-        this.graphReady = true;
-        this.emit('ready');
-      }
-      return db;
-    })();
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_edge_directional ON graph_edges(source_node_id, target_node_id, edge_relationship);
+      CREATE INDEX IF NOT EXISTS idx_edge_source ON graph_edges(source_node_id);
+      CREATE INDEX IF NOT EXISTS idx_edge_target ON graph_edges(target_node_id);
+      CREATE INDEX IF NOT EXISTS idx_node_type ON graph_nodes(node_type);
+    `);
 
-    this.initPromise.catch((err) => {
-      console.error('[graph_engine] knowledge graph initialization failed:', err);
-      this.initPromise = null;
-    });
-
-    return this.initPromise;
+    if (!this.graphReady) {
+      this.graphReady = true;
+      this.emit('ready');
+    }
+    return this.db;
   }
 
   public isReady(): boolean {
@@ -97,96 +80,58 @@ export class GraphEngine extends EventEmitter {
   }
 
   public async addNode(node: IKnowledgeNode): Promise<void> {
-    const db = await this.ensureDb();
-    return new Promise((resolve, reject) => {
-      const stmt = db.prepare(`
-        INSERT OR REPLACE INTO graph_nodes (node_id, node_type, display_name, metadata_payload, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run(
-        node.node_id,
-        node.node_type,
-        node.display_name,
-        node.metadata_payload,
-        node.created_at,
-        node.updated_at,
-        (err: Error | null) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-      stmt.finalize();
-    });
+    const db = this.ensureDb();
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO graph_nodes (node_id, node_type, display_name, metadata_payload, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      node.node_id,
+      node.node_type,
+      node.display_name,
+      node.metadata_payload,
+      node.created_at,
+      node.updated_at
+    );
   }
 
   public async addEdge(edge: IKnowledgeEdge): Promise<void> {
-    const db = await this.ensureDb();
-    return new Promise((resolve, reject) => {
-      const stmt = db.prepare(`
-        INSERT OR REPLACE INTO graph_edges (edge_id, source_node_id, target_node_id, edge_relationship, edge_weight, last_accessed_at)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `);
-      stmt.run(
-        edge.edge_id,
-        edge.source_node_id,
-        edge.target_node_id,
-        edge.edge_relationship,
-        edge.edge_weight,
-        edge.last_accessed_at,
-        (err: Error | null) => {
-          if (err) reject(err);
-          else resolve();
-        }
-      );
-      stmt.finalize();
-    });
+    const db = this.ensureDb();
+    const stmt = db.prepare(`
+      INSERT OR REPLACE INTO graph_edges (edge_id, source_node_id, target_node_id, edge_relationship, edge_weight, last_accessed_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      edge.edge_id,
+      edge.source_node_id,
+      edge.target_node_id,
+      edge.edge_relationship,
+      edge.edge_weight,
+      edge.last_accessed_at
+    );
   }
 
   public async getNodes(): Promise<IKnowledgeNode[]> {
-    const db = await this.ensureDb();
-    return new Promise((resolve, reject) => {
-      db.all('SELECT * FROM graph_nodes', [], (err, rows: IKnowledgeNode[]) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
+    const db = this.ensureDb();
+    return db.prepare('SELECT * FROM graph_nodes').all() as IKnowledgeNode[];
   }
 
   public async getNodesByType(type: string): Promise<IKnowledgeNode[]> {
-    const db = await this.ensureDb();
-    return new Promise((resolve, reject) => {
-      db.all('SELECT * FROM graph_nodes WHERE node_type = ?', [type], (err, rows: IKnowledgeNode[]) => {
-        if (err) reject(err);
-        else resolve(rows);
-      });
-    });
+    const db = this.ensureDb();
+    return db.prepare('SELECT * FROM graph_nodes WHERE node_type = ?').all(type) as IKnowledgeNode[];
   }
 
   public async getEdgesForNode(nodeId: string): Promise<IKnowledgeEdge[]> {
-    const db = await this.ensureDb();
-    return new Promise((resolve, reject) => {
-      db.all(
-        'SELECT * FROM graph_edges WHERE source_node_id = ? OR target_node_id = ?',
-        [nodeId, nodeId],
-        (err, rows: IKnowledgeEdge[]) => {
-          if (err) reject(err);
-          else resolve(rows);
-        }
-      );
-    });
+    const db = this.ensureDb();
+    return db.prepare(
+      'SELECT * FROM graph_edges WHERE source_node_id = ? OR target_node_id = ?'
+    ).all(nodeId, nodeId) as IKnowledgeEdge[];
   }
 
   public async close(): Promise<void> {
-    if (!this.initPromise) return;
-    try {
-      const db = await this.initPromise;
-      await new Promise<void>((resolve, reject) => {
-        db.close((err) => (err ? reject(err) : resolve()));
-      });
-    } catch (err) {
-      console.error('[graph_engine] close failed:', err);
-    } finally {
-      this.initPromise = null;
+    if (this.db) {
+      this.db.close();
+      this.db = null;
       this.graphReady = false;
     }
   }

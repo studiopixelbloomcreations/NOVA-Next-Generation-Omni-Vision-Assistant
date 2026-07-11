@@ -182,8 +182,7 @@ function registerGeminiBridgeHandlers(): void {
     'interaction-complete',
     (interaction: { transcriptInput: string; responseOutput: string; latencyMs: number; timestamp: number }) => {
       const uuid = randomUUID();
-      interactionLedger
-        .insertInteraction({
+      interactionLedger.insertInteraction({
           uuid,
           timestamp_epoch: interaction.timestamp,
           interaction_type: 'voice_loop',
@@ -195,9 +194,6 @@ function registerGeminiBridgeHandlers(): void {
           }),
           embedding_vector_id: `v_${uuid}`,
           performance_latency_ms: interaction.latencyMs,
-        })
-        .catch((err) => {
-          console.error('[main] failed to persist interaction to ledger:', err);
         });
     }
   );

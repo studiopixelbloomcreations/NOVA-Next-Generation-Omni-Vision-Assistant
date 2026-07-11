@@ -39,18 +39,19 @@
     }
   },
   "dependencies": {
+    "better-sqlite3": "^12.11.1",
     "dotenv": "^16.4.7",
     "hls.js": "^1.6.2",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sqlite3": "^5.1.7",
     "three": "^0.170.0",
     "ws": "^8.21.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^4.2.0",
     "@tailwindcss/vite": "^4.0.0-beta.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^26.1.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
