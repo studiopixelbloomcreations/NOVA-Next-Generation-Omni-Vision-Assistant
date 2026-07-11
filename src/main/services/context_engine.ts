@@ -7,6 +7,8 @@ import { IContextChipPayload } from '../../shared/ipc_protocols';
 const POLL_INTERVAL_MS = 2000;
 const TITLE_MAX_LENGTH = 40;
 
+let powershellProcess: ChildProcess | null = null;
+
 function startPowerShellSession(): ChildProcess | null {
   const ps = spawn('powershell', [
     '-NoProfile',
@@ -17,12 +19,32 @@ function startPowerShellSession(): ChildProcess | null {
     windowsHide: true
   });
 
-  // stdin is a Writable stream, we write strings directly
+  // Attach stdout handler immediately to catch __NOVA_READY__
+  (ps as any).outputBuffer = '';
+  (ps as any).ready = false;
+  (ps as any).pendingResolve = null;
+  (ps as any).pendingReject = null;
 
   ps.stdout?.on('data', (data: Buffer) => {
-    // Data handled by the query function via closure
-    if ((ps as any).outputBuffer !== undefined) {
-      (ps as any).outputBuffer += data.toString();
+    (ps as any).outputBuffer += data.toString();
+    
+    while ((ps as any).outputBuffer.includes('__NOVA_READY__')) {
+      const idx = (ps as any).outputBuffer.indexOf('__NOVA_READY__');
+      (ps as any).outputBuffer = (ps as any).outputBuffer.slice(idx + '__NOVA_READY__'.length);
+      (ps as any).ready = true;
+      console.log('[context_engine] PowerShell session ready');
+    }
+    
+    while ((ps as any).outputBuffer.includes('__NOVA_QUERY_COMPLETE__')) {
+      const idx = (ps as any).outputBuffer.indexOf('__NOVA_QUERY_COMPLETE__');
+      const result = (ps as any).outputBuffer.slice(0, idx).trim();
+      (ps as any).outputBuffer = (ps as any).outputBuffer.slice(idx + '__NOVA_QUERY_COMPLETE__'.length);
+      
+      if ((ps as any).pendingResolve) {
+        (ps as any).pendingResolve(result);
+        (ps as any).pendingResolve = null;
+        (ps as any).pendingReject = null;
+      }
     }
   });
 
@@ -81,19 +103,12 @@ function Get-ForegroundWindowInfo {
 Write-Output "__NOVA_READY__"
 `.trim();
 
-  (ps as any).outputBuffer = '';
-  (ps as any).ready = false;
-  (ps as any).pendingResolve = null;
-  (ps as any).pendingReject = null;
-
   ps.stdin?.write(initScript + '\n');
 
   return ps;
 }
 
-let powershellProcess: ChildProcess | null = null;
-
-function ensurePowerShellSession(): ChildProcess {
+function ensurePowerShellSession(): Promise<ChildProcess> {
   if (!powershellProcess || !(powershellProcess as any).ready) {
     if (powershellProcess) {
       try { powershellProcess.kill(); } catch {}
@@ -113,9 +128,9 @@ function ensurePowerShellSession(): ChildProcess {
         clearInterval(checkReady);
         reject(new Error('PowerShell session initialization timeout'));
       }, 5000);
-    }) as any;
+    });
   }
-  return powershellProcess;
+  return Promise.resolve(powershellProcess!);
 }
 
 function queryForegroundWindow(): Promise<string> {
@@ -150,38 +165,6 @@ Write-Output "__NOVA_QUERY_COMPLETE__"
       }
     }, 2500);
   });
-}
-
-// Patch the stdout handler to parse responses
-function setupStdoutHandler(ps: ChildProcess) {
-  ps.stdout?.on('data', (data: Buffer) => {
-    (ps as any).outputBuffer += data.toString();
-    
-    while ((ps as any).outputBuffer.includes('__NOVA_READY__')) {
-      const idx = (ps as any).outputBuffer.indexOf('__NOVA_READY__');
-      (ps as any).outputBuffer = (ps as any).outputBuffer.slice(idx + '__NOVA_READY__'.length);
-      (ps as any).ready = true;
-      console.log('[context_engine] PowerShell session ready');
-    }
-    
-    while ((ps as any).outputBuffer.includes('__NOVA_QUERY_COMPLETE__')) {
-      const idx = (ps as any).outputBuffer.indexOf('__NOVA_QUERY_COMPLETE__');
-      const result = (ps as any).outputBuffer.slice(0, idx).trim();
-      (ps as any).outputBuffer = (ps as any).outputBuffer.slice(idx + '__NOVA_QUERY_COMPLETE__'.length);
-      
-      if ((ps as any).pendingResolve) {
-        (ps as any).pendingResolve(result);
-        (ps as any).pendingResolve = null;
-        (ps as any).pendingReject = null;
-      }
-    }
-  });
-}
-
-// Initialize first session
-powershellProcess = startPowerShellSession();
-if (powershellProcess) {
-  setupStdoutHandler(powershellProcess);
 }
 
 export class ContextEngine extends EventEmitter {

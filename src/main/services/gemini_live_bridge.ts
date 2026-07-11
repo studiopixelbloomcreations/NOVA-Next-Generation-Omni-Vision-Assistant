@@ -74,9 +74,9 @@ export class GeminiLiveBridge extends EventEmitter {
       this.setConnectionState('CONNECTED');
 
       // Properly formatted setup message per Live API spec
-      // Model name WITHOUT "models/" prefix for BidiGenerateContent
+      // Model name MUST include "models/" prefix for BidiGenerateContent
       // Voice must be one of: Aoede, Charon, Fenrir, Kore, Puck
-const setupMessage = {
+      const setupMessage = {
         setup: {
           model: 'models/gemini-2.5-flash-native-audio-preview-12-2025',
           generationConfig: {

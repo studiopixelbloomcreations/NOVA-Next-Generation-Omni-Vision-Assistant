@@ -120,14 +120,15 @@ export const App: React.FC = () => {
             audioCtx.resume();
           }
 
-          // Node buffers sent over IPC are Uint8Array in the browser
-          const rawBuffer = chunk.buffer || chunk;
-          const dataView = new DataView(rawBuffer);
-          const sampleCount = Math.floor(rawBuffer.byteLength / 2);
+          // IPC delivers Buffer as Uint8Array. Ensure we have an ArrayBuffer view.
+          const uint8Array = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+          const arrayBuffer = uint8Array.buffer.slice(uint8Array.byteOffset, uint8Array.byteOffset + uint8Array.byteLength);
+          const dataView = new DataView(arrayBuffer);
+          const sampleCount = Math.floor(arrayBuffer.byteLength / 2);
           const floatData = new Float32Array(sampleCount);
 
           for (let i = 0; i < sampleCount; i++) {
-            // Read 16-bit PCM (signed)
+            // Read 16-bit PCM (signed little-endian)
             const sample = dataView.getInt16(i * 2, true);
             floatData[i] = sample / 32768;
           }
@@ -245,9 +246,11 @@ export const App: React.FC = () => {
             const audioCtx = audioCtxRef.current!;
             if (audioCtx.state === 'suspended') audioCtx.resume();
 
-            const rawBuffer = chunk;
-            const dataView = new DataView(rawBuffer);
-            const sampleCount = Math.floor(rawBuffer.byteLength / 2);
+            // browserBridge delivers ArrayBuffer or Uint8Array
+            const uint8Array = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+            const arrayBuffer = uint8Array.buffer.slice(uint8Array.byteOffset, uint8Array.byteOffset + uint8Array.byteLength);
+            const dataView = new DataView(arrayBuffer);
+            const sampleCount = Math.floor(arrayBuffer.byteLength / 2);
             const floatData = new Float32Array(sampleCount);
 
             for (let i = 0; i < sampleCount; i++) {

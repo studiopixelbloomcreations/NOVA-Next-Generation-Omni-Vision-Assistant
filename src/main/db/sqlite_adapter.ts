@@ -28,7 +28,7 @@ export class SqliteAdapter {
         });
       });
 
-      // Configure WAL mode and create schema with strict constraints
+// Configure WAL mode and create schema with strict constraints
       await new Promise<void>((resolve, reject) => {
         db.exec(
           `
@@ -52,13 +52,39 @@ export class SqliteAdapter {
 
           CREATE INDEX IF NOT EXISTS idx_timestamp ON interaction_ledger(timestamp_epoch);
           CREATE INDEX IF NOT EXISTS idx_interaction_type ON interaction_ledger(interaction_type);
-          CREATE INDEX IF NOT EXISTS idx_created_at ON interaction_ledger(created_at);
+          -- idx_created_at created after migration ensures column exists
           `,
           (err) => {
             if (err) reject(err);
             else resolve();
           }
         );
+      });
+
+      // Migration: ensure created_at column and index exist (for existing databases without it)
+      await new Promise<void>((resolve, reject) => {
+        db.all("PRAGMA table_info(interaction_ledger)", [], (err, rows: any[]) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          const hasCreatedAt = rows.some((col: any) => col.name === 'created_at');
+          if (!hasCreatedAt) {
+            console.log('[sqlite_adapter] Adding missing created_at column to interaction_ledger');
+            db.exec(
+              `ALTER TABLE interaction_ledger ADD COLUMN created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000);`,
+              (alterErr) => {
+                if (alterErr) reject(alterErr);
+                else {
+                  db.exec(`CREATE INDEX IF NOT EXISTS idx_created_at ON interaction_ledger(created_at);`, () => resolve());
+                }
+              }
+            );
+          } else {
+            // Column exists, ensure index exists
+            db.exec(`CREATE INDEX IF NOT EXISTS idx_created_at ON interaction_ledger(created_at);`, () => resolve());
+          }
+        });
       });
 
       return db;
