@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MainUI } from './renderer/components/MainUI';
 import { HUDUI } from './renderer/components/HUDUI';
-import { WindowControls } from './renderer/components/WindowControls';
 import { audioRecorder } from './renderer/utils/audio_recorder';
 import {
   NovaVoiceState,
@@ -29,6 +28,9 @@ export const App: React.FC = () => {
   const [transcripts, setTranscripts] = useState<ITranscriptEntry[]>([]);
   const [telemetry, setTelemetry] = useState<ISystemTelemetryPayload | null>(null);
   const [contextChips, setContextChips] = useState<IContextChipPayload['chips']>([]);
+  const [toolSynthesisPhase, setToolSynthesisPhase] = useState<string>('IDLE');
+  const [toolSynthesisSteps, setToolSynthesisSteps] = useState<any[]>([]);
+  const [showToolSynthesis, setShowToolSynthesis] = useState(false);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const nextStartTimeRef = useRef(0);
@@ -206,6 +208,17 @@ export const App: React.FC = () => {
       ipcRenderer.on('ai-amplitude', onAiAmplitude);
       ipcRenderer.on('agent-progress-update', onProgressUpdate);
       ipcRenderer.on('agent-tool-created', onToolCreated);
+      ipcRenderer.on('agent-tool-synthesis-phase', (_event: any, payload: any) => {
+        if (payload) {
+          setToolSynthesisPhase(payload.phase);
+          setShowToolSynthesis(payload.phase !== 'IDLE' && payload.phase !== 'COMPLETED' && payload.phase !== 'FAILED');
+        }
+      });
+      ipcRenderer.on('agent-tool-synthesis-steps', (_event: any, payload: any) => {
+        if (payload && payload.steps) {
+          setToolSynthesisSteps(payload.steps);
+        }
+      });
       ipcRenderer.on('ai-audio-chunk', onAiAudioChunk);
       ipcRenderer.on('ai-text-token', onAiTextToken);
       ipcRenderer.on(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, onUserTextTranscribed);
@@ -225,6 +238,8 @@ export const App: React.FC = () => {
         ipcRenderer.removeListener('ai-amplitude', onAiAmplitude);
         ipcRenderer.removeListener('agent-progress-update', onProgressUpdate);
         ipcRenderer.removeListener('agent-tool-created', onToolCreated);
+        ipcRenderer.removeListener('agent-tool-synthesis-phase', () => {});
+        ipcRenderer.removeListener('agent-tool-synthesis-steps', () => {});
         ipcRenderer.removeListener('ai-audio-chunk', onAiAudioChunk);
         ipcRenderer.removeListener('ai-text-token', onAiTextToken);
         ipcRenderer.removeListener(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, onUserTextTranscribed);
@@ -356,7 +371,6 @@ export const App: React.FC = () => {
 
   return (
     <div className="w-screen h-screen overflow-hidden bg-[#020205]">
-      <WindowControls />
       {showHUD ? (
         <HUDUI
           voiceState={voiceState}
@@ -370,7 +384,9 @@ export const App: React.FC = () => {
           telemetry={telemetry}
           contextChips={contextChips}
           onSearchSubmit={handleSearchSubmit}
-          onCloseHUD={() => handleToggleHUD(false)}
+          toolSynthesisPhase={toolSynthesisPhase}
+          toolSynthesisSteps={toolSynthesisSteps}
+          showToolSynthesis={showToolSynthesis}
         />
       ) : (
         <MainUI

@@ -95,10 +95,10 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: Math.min(1280, width),
     height: Math.min(800, height),
-    frame: false,
-    transparent: true,
-    backgroundColor: '#00000000',
-    hasShadow: false,
+    frame: true,
+    transparent: false,
+    backgroundColor: '#020205',
+    hasShadow: true,
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,

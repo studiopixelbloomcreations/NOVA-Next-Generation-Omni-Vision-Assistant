@@ -18,7 +18,9 @@ interface HUDUIProps {
   telemetry: ISystemTelemetryPayload | null;
   contextChips: IContextChipPayload['chips'];
   onSearchSubmit: (text: string) => void;
-  onCloseHUD: () => void;
+  toolSynthesisPhase?: string;
+  toolSynthesisSteps?: any[];
+  showToolSynthesis?: boolean;
 }
 
 export const HUDUI: React.FC<HUDUIProps> = ({
@@ -33,7 +35,9 @@ export const HUDUI: React.FC<HUDUIProps> = ({
   telemetry,
   contextChips,
   onSearchSubmit,
-  onCloseHUD,
+  toolSynthesisPhase = 'IDLE',
+  toolSynthesisSteps = [],
+  showToolSynthesis = true,
 }) => {
   return (
     <div className="w-screen h-screen bg-[#020205] flex flex-col relative overflow-hidden text-white font-rajdhani select-none border border-blue-500/10">
@@ -57,6 +61,9 @@ export const HUDUI: React.FC<HUDUIProps> = ({
             setActiveToolId={setActiveToolId}
             telemetry={telemetry}
             contextChips={contextChips}
+            toolSynthesisPhase={toolSynthesisPhase}
+            toolSynthesisSteps={toolSynthesisSteps}
+            showToolSynthesis={showToolSynthesis}
           />
         </div>
 
@@ -80,14 +87,6 @@ export const HUDUI: React.FC<HUDUIProps> = ({
           height={120}
         />
       </div>
-
-      {/* Return button overlay */}
-      <button
-        onClick={onCloseHUD}
-        className="absolute top-4 right-8 hover:text-blue-400 text-xs font-rajdhani font-semibold tracking-[0.15em] text-[#ffffff20] uppercase cursor-pointer z-50 transition-colors duration-200"
-      >
-        [ Return to Orb ]
-      </button>
 
     </div>
   );

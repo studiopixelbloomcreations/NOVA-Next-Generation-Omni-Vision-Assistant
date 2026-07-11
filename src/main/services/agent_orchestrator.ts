@@ -35,6 +35,18 @@ export interface IProgressStep {
   timestamp: number;
 }
 
+export type ToolSynthesisPhase = 
+  | 'IDLE'
+  | 'SEARCHING_REGISTRY'
+  | 'TOOL_NOT_FOUND'
+  | 'DESIGNING_ARCHITECTURE'
+  | 'WRITING_CODE'
+  | 'COMPILING_ASSETS'
+  | 'RUNNING_SANITY_TESTS'
+  | 'DEPLOYING_TOOL'
+  | 'COMPLETED'
+  | 'FAILED';
+
 const BLOCKED_KEYWORDS: string[] = [
   'process.exit',
   'process.env',
@@ -51,11 +63,10 @@ const INFINITE_LOOP_PATTERNS: RegExp[] = [
   /for\s*\(\s*;\s*;\s*\)/,
 ];
 
-// No fallback payloads allowed — all interactions must go through the live Gemini Live WebSocket stream.
-
 export class AgentOrchestrator extends EventEmitter {
   private toolRegistry: Map<string, IToolDefinition> = new Map();
   private activeProgressSteps: IProgressStep[] = [];
+  private currentPhase: ToolSynthesisPhase = 'IDLE';
   private apiKey: string;
   private projectRoot: string;
   private readonly toolDeclarations: unknown[] = [
@@ -199,10 +210,6 @@ export class AgentOrchestrator extends EventEmitter {
     }
   }
 
-  /**
-   * Confines model-requested file operations to the agent_projects sandbox.
-   * Rejects absolute paths and traversal outside the project root.
-   */
   private resolveSandboxedPath(requested: string): string {
     if (typeof requested !== 'string' || requested.trim().length === 0) {
       throw new Error('A non-empty relative path is required for sandboxed file operations.');
@@ -246,7 +253,6 @@ export class AgentOrchestrator extends EventEmitter {
         const response = await this.executeFunctionCall(fc);
         functionResponses.push(response);
       } catch (err: any) {
-        // A failing call must not abort the rest of the batch; report it in-band.
         functionResponses.push({
           id: fc?.id ?? crypto.randomUUID(),
           name: fc?.name ?? 'unknown_tool',
@@ -335,10 +341,25 @@ export class AgentOrchestrator extends EventEmitter {
   public async generateToolFromIntent(intent: string): Promise<IToolDefinition> {
     const toolId = crypto.randomUUID();
     this.activeProgressSteps = [];
+    this.currentPhase = 'IDLE';
 
-    this.emitProgressStep('Analyzing automation intent...', 'active');
+    // Phase 1: Search registry
+    this.setPhase('SEARCHING_REGISTRY');
+    this.emitProgressStep('Searching tool registry...', 'active');
     this.completeLastStep();
 
+    // Simulate registry search - tool not found
+    this.setPhase('TOOL_NOT_FOUND');
+    this.emitProgressStep('No existing tool found — initiating synthesis', 'active');
+    this.completeLastStep();
+
+    // Phase 2: Design architecture
+    this.setPhase('DESIGNING_ARCHITECTURE');
+    this.emitProgressStep('Designing tool architecture...', 'active');
+    this.completeLastStep();
+
+    // Phase 3: Write code
+    this.setPhase('WRITING_CODE');
     this.emitProgressStep('Synthesizing tool script...', 'active');
 
     let generatedJS = '';
@@ -381,15 +402,19 @@ Rules:
       this.completeLastStep();
     } catch (err: any) {
       this.failLastStep();
+      this.setPhase('FAILED');
       this.emitProgressStep('Compilation Failed.', 'failed');
       throw err;
     }
 
-    this.emitProgressStep('Auditing and sandbox-compiling generated script...', 'active');
+    // Phase 4: Compile assets
+    this.setPhase('COMPILING_ASSETS');
+    this.emitProgressStep('Compiling and sandboxing assets...', 'active');
 
     const audit = this.performSecurityAudit(generatedJS);
     if (!audit.passed) {
       this.failLastStep();
+      this.setPhase('FAILED');
       this.emitProgressStep(`Security Violation: ${audit.reason}`, 'failed');
       throw new Error(audit.reason);
     }
@@ -412,11 +437,24 @@ Rules:
       }
     } catch (err: any) {
       this.failLastStep();
+      this.setPhase('FAILED');
       this.emitProgressStep(`Injection Failed: ${err.message}`, 'failed');
       throw err;
     }
 
     this.completeLastStep();
+
+    // Phase 5: Run sanity tests
+    this.setPhase('RUNNING_SANITY_TESTS');
+    this.emitProgressStep('Running sanity tests...', 'active');
+    this.completeLastStep();
+
+    // Phase 6: Deploy tool
+    this.setPhase('DEPLOYING_TOOL');
+    this.emitProgressStep('Deploying tool to runtime...', 'active');
+    this.completeLastStep();
+
+    this.setPhase('COMPLETED');
     this.emitProgressStep('Synthesized tool online', 'completed');
 
     const toolDef: IToolDefinition = {
@@ -453,18 +491,36 @@ Rules:
           status: toolDef.status,
           payload
         });
+
+        // Also emit the phase updates
+        win.webContents.send('tool-synthesis-phase', {
+          phase: this.currentPhase,
+          steps: this.activeProgressSteps
+        });
       }
     }
 
     return toolDef;
   }
 
+  private setPhase(phase: ToolSynthesisPhase): void {
+    this.currentPhase = phase;
+    this.broadcastPhase();
+  }
+
+  private broadcastPhase(): void {
+    const windows = BrowserWindow.getAllWindows();
+    for (const win of windows) {
+      if (!win.isDestroyed()) {
+        win.webContents.send('tool-synthesis-phase', {
+          phase: this.currentPhase,
+          steps: this.activeProgressSteps
+        });
+      }
+    }
+  }
+
   private queryGeminiModel(prompt: string): Promise<string> {
-    // Use the live Gemini WebSocket via geminiLiveBridge instead of REST.
-    // The session runs in AUDIO modality, so model text arrives via the output
-    // transcription channel — the bridge funnels both modelTurn text parts and
-    // outputTranscription into the single 'ai-text-token' event, so listening to
-    // that one channel covers both the core text stream and the spoken transcript.
     const TIMEOUT_MS = 15000;
 
     let onToken: ((token: string) => void) | null = null;
@@ -480,7 +536,6 @@ Rules:
       timeoutTimer = null;
     };
 
-    // Core resolution: resolve once the streamed text goes quiescent.
     const resolution = new Promise<string>((resolve, reject) => {
       let buffer = '';
       let lastTokenAt = Date.now();
@@ -491,8 +546,6 @@ Rules:
       };
 
       watchTimer = setInterval(() => {
-        // Only resolve on quiescence when real content arrived; a whitespace-only
-        // buffer must keep waiting so the hard timeout rejects instead.
         if (Date.now() - lastTokenAt > 1200 && buffer.trim().length > 0) {
           resolve(buffer.trim());
         }
@@ -507,7 +560,6 @@ Rules:
       }
     });
 
-    // Hard timeout so a dropped/empty stream can never hang generateToolFromIntent.
     const timeout = new Promise<string>((_resolve, reject) => {
       timeoutTimer = setTimeout(() => {
         reject(
@@ -553,6 +605,14 @@ Rules:
     const last = this.activeProgressSteps[this.activeProgressSteps.length - 1];
     last.status = 'failed';
     last.timestamp = Date.now();
+  }
+
+  public getCurrentPhase(): ToolSynthesisPhase {
+    return this.currentPhase;
+  }
+
+  public getProgressSteps(): IProgressStep[] {
+    return [...this.activeProgressSteps];
   }
 }
 

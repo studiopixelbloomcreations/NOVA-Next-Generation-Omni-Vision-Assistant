@@ -25,6 +25,9 @@ interface CenterHUDProps {
   setActiveToolId?: (id: string | null) => void;
   telemetry: ISystemTelemetryPayload | null;
   contextChips: IContextChipPayload['chips'];
+  toolSynthesisPhase?: string;
+  toolSynthesisSteps?: any[];
+  showToolSynthesis?: boolean;
 }
 
 export const CenterHUD: React.FC<CenterHUDProps> = ({
@@ -34,10 +37,30 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
   setActiveToolId = () => {},
   telemetry,
   contextChips,
+  toolSynthesisPhase = 'IDLE',
+  toolSynthesisSteps = [],
+  showToolSynthesis = true,
 }) => {
   const [inputText, setInputText] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [sessionStartTime] = useState(Date.now());
+
+  // Helper to calculate synthesis progress based on phase
+  const getSynthesisProgress = useCallback((): number => {
+    const phaseOrder: Record<string, number> = {
+      'IDLE': 0,
+      'SEARCHING_REGISTRY': 5,
+      'TOOL_NOT_FOUND': 10,
+      'DESIGNING_ARCHITECTURE': 20,
+      'WRITING_CODE': 40,
+      'COMPILING_ASSETS': 60,
+      'RUNNING_SANITY_TESTS': 80,
+      'DEPLOYING_TOOL': 95,
+      'COMPLETED': 100,
+      'FAILED': 100,
+    };
+    return phaseOrder[toolSynthesisPhase] ?? 0;
+  }, [toolSynthesisPhase]);
 
   // Live clock sync - 1 second interval for second-precision
   useEffect(() => {
@@ -196,6 +219,61 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Tool Synthesis Progress Bar */}
+      {showToolSynthesis && toolSynthesisPhase !== 'IDLE' && toolSynthesisPhase !== 'COMPLETED' && toolSynthesisPhase !== 'FAILED' && (
+        <div className="flex-shrink-0 mb-4 glass-base rounded-xl border border-cyan-500/20 p-4 animate-slide-down">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-cyan-500/20 border border-cyan-500/40 flex items-center justify-center animate-pulse">
+              <Cpu size={14} className="text-cyan-400" />
+            </div>
+            <div className="flex-1">
+              <p className="font-orbitron text-xs font-bold text-cyan-400 tracking-[0.1em] uppercase">
+                SYNTHESIZING TOOL
+              </p>
+              <p className="font-rajdhani text-[10px] text-cyan-300/70 tracking-[0.05em] uppercase">
+                {toolSynthesisPhase.replace(/_/g, ' ')}
+              </p>
+            </div>
+          </div>
+          
+          {/* Progress bar with steps */}
+          <div className="space-y-2">
+            <div className="h-2 bg-black/40 rounded-full overflow-hidden">
+              <div 
+                className="h-full bg-gradient-to-r from-cyan-500 via-cyan-400 to-cyan-600 rounded-full transition-all duration-500 ease-out"
+                style={{ width: getSynthesisProgress() + '%' }}
+              />
+            </div>
+            <div className="flex items-center justify-between text-[9px] font-rajdhani uppercase tracking-[0.1em]">
+              <span className="text-cyan-400/80">INITIALIZING</span>
+              <span className="text-white/60">{Math.round(getSynthesisProgress())}%</span>
+              <span className="text-cyan-400/80">DEPLOYING</span>
+            </div>
+            
+            {/* Step indicators */}
+            {toolSynthesisSteps.length > 0 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                {toolSynthesisSteps.map((step, idx) => (
+                  <div key={step.stepId} className="flex-shrink-0 flex flex-col items-center gap-1">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[8px] font-bold transition-all ${
+                      step.status === 'completed' ? 'bg-emerald-500 text-black' :
+                      step.status === 'active' ? 'bg-cyan-500 text-black animate-pulse' :
+                      step.status === 'failed' ? 'bg-rose-500 text-white' :
+                      'bg-white/10 text-white/30 border border-white/20'
+                    }`}>
+                      {step.status === 'completed' ? '✓' : step.status === 'active' ? idx + 1 : '✗'}
+                    </div>
+                    <span className="text-[7px] font-rajdhani uppercase tracking-[0.05em] text-white/40 whitespace-nowrap max-w-[80px] text-center truncate">
+                      {step.label.length > 18 ? step.label.slice(0, 18) + '…' : step.label}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Main Dialogue Transcript / Tool Window Container */}
       <div className="flex-1 flex items-center justify-center my-4 overflow-hidden">
