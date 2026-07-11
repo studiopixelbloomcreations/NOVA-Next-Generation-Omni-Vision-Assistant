@@ -21,14 +21,14 @@ const GEMINI_SETUP_MESSAGE = JSON.stringify({
     model: GEMINI_LIVE_MODEL,
     generationConfig: {
       responseModalities: ['AUDIO'],
+      speechConfig: {
+        voiceConfig: {
+          prebuiltVoiceConfig: { voiceName: 'Kore' },
+        },
+      },
     },
     systemInstruction: {
       parts: [{ text: 'You are a secure assistant. Respond concisely and clearly.' }],
-    },
-    speechConfig: {
-      voiceConfig: {
-        prebuiltVoiceConfig: { voiceName: 'Kore' },
-      },
     },
     inputAudioTranscription: {},
     outputAudioTranscription: {},
@@ -215,6 +215,18 @@ export default defineConfig({
   base: './',
   server: {
     port: 8080,
+    watch: {
+      ignored: [
+        '**/dist/**',
+        '**/dist_electron/**',
+        '**/node_modules/**',
+        '**/*.db*',
+        '**/*.log',
+        '**/interaction_ledger.db*',
+        '**/knowledge_graph.db*',
+        '**/electron_run.log',
+      ],
+    },
   },
   build: {
     outDir: 'dist/renderer',

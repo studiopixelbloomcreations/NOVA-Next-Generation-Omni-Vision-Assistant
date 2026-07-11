@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MainUI } from './renderer/components/MainUI';
 import { HUDUI } from './renderer/components/HUDUI';
-import { ITranscriptEntry } from './renderer/components/RightPanel';
 import { WindowControls } from './renderer/components/WindowControls';
 import { audioRecorder } from './renderer/utils/audio_recorder';
 import {
@@ -11,11 +10,12 @@ import {
   ISystemTelemetryPayload,
   IContextChipPayload,
 } from './shared/ipc_protocols';
+import { ITranscriptEntry } from './renderer/components/RightPanel';
+import { browserBridge } from './renderer/utils/browser_bridge';
 
 // Check if running in Electron environment
 const isElectron = typeof window !== 'undefined' && window.process && (window.process as any).type === 'renderer';
 const ipcRenderer = isElectron ? (window as any).require('electron').ipcRenderer : null;
-import { browserBridge } from './renderer/utils/browser_bridge';
 
 export const App: React.FC = () => {
   const [showHUD, setShowHUD] = useState(false);

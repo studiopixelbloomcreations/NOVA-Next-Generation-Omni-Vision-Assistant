@@ -28,22 +28,31 @@ export class SqliteAdapter {
         });
       });
 
+      // Configure WAL mode and create schema with strict constraints
       await new Promise<void>((resolve, reject) => {
         db.exec(
           `
           PRAGMA journal_mode=WAL;
+          PRAGMA synchronous=NORMAL;
+          PRAGMA foreign_keys=ON;
+          PRAGMA temp_store=MEMORY;
+          PRAGMA cache_size=-32768;
+
           CREATE TABLE IF NOT EXISTS interaction_ledger (
               uuid TEXT PRIMARY KEY NOT NULL,
               timestamp_epoch INTEGER NOT NULL,
-              interaction_type TEXT NOT NULL,
+              interaction_type TEXT NOT NULL CHECK(interaction_type IN ('voice_loop', 'tool_execution', 'automation_trigger', 'context_update')),
               raw_transcript_input TEXT,
               model_response_output TEXT,
               context_snapshot_json TEXT NOT NULL,
               embedding_vector_id TEXT NOT NULL,
-              performance_latency_ms INTEGER NOT NULL
+              performance_latency_ms INTEGER NOT NULL CHECK(performance_latency_ms >= 0),
+              created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000)
           );
+
           CREATE INDEX IF NOT EXISTS idx_timestamp ON interaction_ledger(timestamp_epoch);
           CREATE INDEX IF NOT EXISTS idx_interaction_type ON interaction_ledger(interaction_type);
+          CREATE INDEX IF NOT EXISTS idx_created_at ON interaction_ledger(created_at);
           `,
           (err) => {
             if (err) reject(err);
@@ -106,6 +115,34 @@ export class SqliteAdapter {
     });
   }
 
+  public async getInteractionsByType(type: string, limit: number = 50): Promise<IInteractionLedgerEntry[]> {
+    const db = await this.ensureDb();
+    return new Promise((resolve, reject) => {
+      db.all(
+        'SELECT * FROM interaction_ledger WHERE interaction_type = ? ORDER BY timestamp_epoch DESC LIMIT ?',
+        [type, limit],
+        (err, rows: IInteractionLedgerEntry[]) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+  }
+
+  public async getInteractionsSince(sinceEpoch: number, limit: number = 100): Promise<IInteractionLedgerEntry[]> {
+    const db = await this.ensureDb();
+    return new Promise((resolve, reject) => {
+      db.all(
+        'SELECT * FROM interaction_ledger WHERE timestamp_epoch >= ? ORDER BY timestamp_epoch DESC LIMIT ?',
+        [sinceEpoch, limit],
+        (err, rows: IInteractionLedgerEntry[]) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+  }
+
   public async close(): Promise<void> {
     if (!this.initPromise) return;
     try {
@@ -120,4 +157,5 @@ export class SqliteAdapter {
     }
   }
 }
+
 export const interactionLedger = new SqliteAdapter();

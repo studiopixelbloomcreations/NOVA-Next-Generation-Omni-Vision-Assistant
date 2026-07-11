@@ -56,6 +56,7 @@ export const HUDUI: React.FC<HUDUIProps> = ({
             activeToolId={activeToolId}
             setActiveToolId={setActiveToolId}
             telemetry={telemetry}
+            contextChips={contextChips}
           />
         </div>
 

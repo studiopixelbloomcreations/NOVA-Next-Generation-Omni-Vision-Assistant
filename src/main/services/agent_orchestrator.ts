@@ -554,7 +554,6 @@ Rules:
     last.status = 'failed';
     last.timestamp = Date.now();
   }
-
 }
 
 export const agentOrchestrator = new AgentOrchestrator(process.env.GEMINI_API_KEY ?? '');

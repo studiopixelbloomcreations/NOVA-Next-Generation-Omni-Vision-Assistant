@@ -1,15 +1,7 @@
 // src/renderer/components/CenterHUD.tsx
-import React, { useState, useEffect } from 'react';
-import { Camera, Globe, Folder, Search, Cpu, X, Radio } from 'lucide-react';
-import { ISystemTelemetryPayload } from '../../shared/ipc_protocols';
-
-interface CenterHUDProps {
-  onSearchSubmit: (text: string) => void;
-  createdTools?: any[];
-  activeToolId?: string | null;
-  setActiveToolId?: (id: string | null) => void;
-  telemetry: ISystemTelemetryPayload | null;
-}
+import React, { useState, useEffect, useCallback } from 'react';
+import { Camera, Folder, Search, Cpu, X, Radio, Zap } from 'lucide-react';
+import { ISystemTelemetryPayload, IContextChipPayload } from '../../shared/ipc_protocols';
 
 function extractUrlHost(url: string): string {
   try {
@@ -19,57 +11,95 @@ function extractUrlHost(url: string): string {
   }
 }
 
+interface ActionCard {
+  title: string;
+  query: string;
+  icon: React.ElementType;
+  contextual?: boolean;
+}
+
+interface CenterHUDProps {
+  onSearchSubmit: (text: string) => void;
+  createdTools?: any[];
+  activeToolId?: string | null;
+  setActiveToolId?: (id: string | null) => void;
+  telemetry: ISystemTelemetryPayload | null;
+  contextChips: IContextChipPayload['chips'];
+}
+
 export const CenterHUD: React.FC<CenterHUDProps> = ({
   onSearchSubmit,
   createdTools = [],
   activeToolId = null,
   setActiveToolId = () => {},
   telemetry,
+  contextChips,
 }) => {
   const [inputText, setInputText] = useState('');
   const [now, setNow] = useState(() => new Date());
+  const [sessionStartTime] = useState(Date.now());
 
+  // Live clock sync - 1 second interval for second-precision
   useEffect(() => {
-    const intervalId = setInterval(() => setNow(new Date()), 30_000);
+    const intervalId = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(intervalId);
   }, []);
 
-  const timeLabel = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const timeLabel = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit' });
   const dateLabel = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  // Session uptime
+  const sessionUptimeMs = Date.now() - sessionStartTime;
+  const uptimeMinutes = Math.floor(sessionUptimeMs / 60000);
+  const uptimeSeconds = Math.floor((sessionUptimeMs % 60000) / 1000);
+  const uptimeLabel = `${uptimeMinutes.toString().padStart(2, '0')}:${uptimeSeconds.toString().padStart(2, '0')}`;
+
+  const handleKeyPress = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && inputText.trim() !== '') {
       onSearchSubmit(inputText.trim());
       setInputText('');
     }
-  };
+  }, [inputText, onSearchSubmit]);
 
-  const actionCards = [
-    { title: 'Live Global News', query: 'Watch live global news', icon: Globe },
-    { title: 'Summarize Screen', query: 'Summarize what is on my screen', icon: Camera },
-    { title: 'List Projects', query: 'List my projects', icon: Folder },
-    { title: 'Search History', query: 'Search my interaction history', icon: Search },
-  ];
+  // Dynamic action cards driven by live context chips
+  const actionCards = React.useMemo((): ActionCard[] => {
+    const baseCards: ActionCard[] = [
+      { title: 'Analyze Screen', query: 'Analyze what is currently on my screen', icon: Camera },
+      { title: 'List Projects', query: 'List all active projects in workspace', icon: Folder },
+      { title: 'Search History', query: 'Search interaction history for relevant context', icon: Search },
+    ];
+    
+    // Add context-aware actions based on active chips
+    const contextualActions: ActionCard[] = contextChips.slice(0, 1).map((chip) => ({
+      title: `Inspect ${chip.label.slice(0, 18)}`,
+      query: `Provide deep analysis of ${chip.label}`,
+      icon: Zap,
+      contextual: true,
+    }));
+    
+    return [...baseCards, ...contextualActions].slice(0, 4);
+  }, [contextChips]);
 
   const activeTool = createdTools.find((t) => t.id === activeToolId);
 
   const captureLabel = telemetry
     ? `${telemetry.captureWidth}×${telemetry.captureHeight} @ ${telemetry.frameRate}fps`
-    : '—';
-  const deltaLabel = telemetry ? `${telemetry.mutatedBlocks}/${telemetry.totalBlocks} blocks` : '—';
+    : 'NO SIGNAL';
+  const deltaLabel = telemetry ? `${telemetry.mutatedBlocks}/${telemetry.totalBlocks} Δ` : '—';
   const latencyLabel =
     telemetry && telemetry.geminiState === 'CONNECTED' ? `${telemetry.streamLatencyMs}ms` : '—';
-  const geminiLabel = telemetry ? telemetry.geminiState : '—';
+  const geminiLabel = telemetry ? telemetry.geminiState : 'OFFLINE';
 
   const telemetryFields = [
     { label: 'CAPTURE', value: captureLabel },
     { label: 'DELTA', value: deltaLabel },
     { label: 'LINK', value: latencyLabel },
     { label: 'GEMINI', value: geminiLabel },
+    { label: 'UPTIME', value: uptimeLabel },
   ];
 
   // Render live visualization for synthesized tools
-  const renderToolWidget = () => {
+  const renderToolWidget = useCallback(() => {
     if (!activeTool) return null;
 
     const streamUrl: string | undefined = activeTool.payload?.streamUrl;
@@ -125,7 +155,7 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
         </div>
       </div>
     );
-  };
+  }, [activeTool, setActiveToolId]);
 
   return (
     <div className="flex-1 h-full px-8 py-6 flex flex-col justify-between select-none overflow-hidden">
@@ -156,12 +186,13 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
             ))}
           </div>
 
-          {/* Live localized clock */}
+          {/* Live localized clock + session uptime */}
           <div className="text-right">
             <p className="font-rajdhani text-xs font-bold tracking-[0.1em] text-blue-300/80">{timeLabel}</p>
             <p className="font-rajdhani text-[9px] font-semibold tracking-[0.15em] text-[#ffffff30] uppercase mt-0.5">
               {dateLabel}
             </p>
+            <p className="font-mono text-[8px] text-cyan-400/60 tracking-[0.1em] mt-1">SESSION {uptimeLabel}</p>
           </div>
         </div>
       </div>
@@ -233,11 +264,11 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
             SUGGESTED ACTIONS
           </h5>
           <div className="grid grid-cols-4 gap-3.5">
-            {actionCards.map((card, idx) => {
+            {actionCards.map((card) => {
               const Icon = card.icon;
               return (
                 <div
-                  key={idx}
+                  key={card.title}
                   onClick={() => onSearchSubmit(card.query)}
                   className="glass-base p-3.5 rounded-xl flex items-center gap-3 hover:border-blue-500/30 hover:bg-[#ffffff05] cursor-pointer transition-all duration-200 group"
                 >
@@ -246,7 +277,7 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
                   </div>
                   <div className="flex flex-col">
                     <span className="font-rajdhani text-[9px] font-bold tracking-[0.05em] text-[#ffffff40] uppercase">
-                      TRIGGER
+                      {card.contextual ? 'CONTEXT' : 'TRIGGER'}
                     </span>
                     <span className="font-rajdhani text-xs font-bold tracking-[0.03em] text-[#f5f8ff] mt-0.5">
                       {card.title}

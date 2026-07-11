@@ -40,9 +40,14 @@ export class GraphEngine extends EventEmitter {
         db.exec(
           `
           PRAGMA journal_mode=WAL;
+          PRAGMA synchronous=NORMAL;
+          PRAGMA foreign_keys=ON;
+          PRAGMA temp_store=MEMORY;
+          PRAGMA cache_size=-32768;
+
           CREATE TABLE IF NOT EXISTS graph_nodes (
               node_id TEXT PRIMARY KEY NOT NULL,
-              node_type TEXT NOT NULL,
+              node_type TEXT NOT NULL CHECK(node_type IN ('entity', 'concept', 'project', 'file', 'tool', 'session')),
               display_name TEXT NOT NULL,
               metadata_payload TEXT,
               created_at INTEGER NOT NULL,
@@ -53,14 +58,17 @@ export class GraphEngine extends EventEmitter {
               edge_id TEXT PRIMARY KEY NOT NULL,
               source_node_id TEXT NOT NULL,
               target_node_id TEXT NOT NULL,
-              edge_relationship TEXT NOT NULL,
-              edge_weight REAL NOT NULL DEFAULT 1.0,
+              edge_relationship TEXT NOT NULL CHECK(edge_relationship IN ('contains', 'references', 'depends_on', 'derived_from', 'related_to', 'created_by')),
+              edge_weight REAL NOT NULL DEFAULT 1.0 CHECK(edge_weight >= 0.0 AND edge_weight <= 1.0),
               last_accessed_at INTEGER NOT NULL,
               FOREIGN KEY(source_node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE,
               FOREIGN KEY(target_node_id) REFERENCES graph_nodes(node_id) ON DELETE CASCADE
           );
 
           CREATE UNIQUE INDEX IF NOT EXISTS idx_edge_directional ON graph_edges(source_node_id, target_node_id, edge_relationship);
+          CREATE INDEX IF NOT EXISTS idx_edge_source ON graph_edges(source_node_id);
+          CREATE INDEX IF NOT EXISTS idx_edge_target ON graph_edges(target_node_id);
+          CREATE INDEX IF NOT EXISTS idx_node_type ON graph_nodes(node_type);
           `,
           (err) => {
             if (err) reject(err);
@@ -144,6 +152,30 @@ export class GraphEngine extends EventEmitter {
     });
   }
 
+  public async getNodesByType(type: string): Promise<IKnowledgeNode[]> {
+    const db = await this.ensureDb();
+    return new Promise((resolve, reject) => {
+      db.all('SELECT * FROM graph_nodes WHERE node_type = ?', [type], (err, rows: IKnowledgeNode[]) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+  }
+
+  public async getEdgesForNode(nodeId: string): Promise<IKnowledgeEdge[]> {
+    const db = await this.ensureDb();
+    return new Promise((resolve, reject) => {
+      db.all(
+        'SELECT * FROM graph_edges WHERE source_node_id = ? OR target_node_id = ?',
+        [nodeId, nodeId],
+        (err, rows: IKnowledgeEdge[]) => {
+          if (err) reject(err);
+          else resolve(rows);
+        }
+      );
+    });
+  }
+
   public async close(): Promise<void> {
     if (!this.initPromise) return;
     try {
@@ -155,6 +187,7 @@ export class GraphEngine extends EventEmitter {
       console.error('[graph_engine] close failed:', err);
     } finally {
       this.initPromise = null;
+      this.graphReady = false;
     }
   }
 

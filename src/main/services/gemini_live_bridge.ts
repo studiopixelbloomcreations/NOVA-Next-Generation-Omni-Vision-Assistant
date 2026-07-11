@@ -10,7 +10,6 @@ const RECONNECT_BASE_DELAY_MS = 1000;
 const RECONNECT_MAX_DELAY_MS = 30000;
 const RECONNECT_JITTER_RATIO = 0.2;
 const HEARTBEAT_INTERVAL_MS = 15000;
-// Two missed heartbeat intervals with no pong → the socket is considered dead.
 const STALE_CONNECTION_MS = HEARTBEAT_INTERVAL_MS * 2;
 
 export class GeminiLiveBridge extends EventEmitter {
@@ -52,33 +51,44 @@ export class GeminiLiveBridge extends EventEmitter {
     }
 
     if (!this.apiKey) {
-      console.warn('GeminiLiveBridge: Environment key process.env.GEMINI_API_KEY is undefined.');
+      console.warn('[geminiLiveBridge] GEMINI_API_KEY is undefined. Set it in .env file.');
       this.setConnectionState('ERROR');
       return;
     }
 
+    // Validate API key format
+    if (!this.apiKey.startsWith('AIzaSy')) {
+      console.warn('[geminiLiveBridge] GEMINI_API_KEY does not look like a valid Google AI Studio key (should start with AIzaSy)');
+    }
+
+    // Correct endpoint: BidiGenerateContent with API key as query param
     const endpoint = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
 
+    console.log('[geminiLiveBridge] Connecting to Gemini Live API...');
     this.setConnectionState('CONNECTING');
     this.ws = new WebSocket(endpoint);
 
     this.ws.on('open', () => {
+      console.log('[geminiLiveBridge] WebSocket opened, sending setup frame');
       this.connected = true;
       this.setConnectionState('CONNECTED');
 
-      const setupMessage: any = {
+      // Properly formatted setup message per Live API spec
+      // Model name WITHOUT "models/" prefix for BidiGenerateContent
+      // Voice must be one of: Aoede, Charon, Fenrir, Kore, Puck
+const setupMessage = {
         setup: {
           model: 'models/gemini-2.5-flash-native-audio-preview-12-2025',
           generationConfig: {
             responseModalities: ['AUDIO'],
+            speechConfig: {
+              voiceConfig: {
+                prebuiltVoiceConfig: { voiceName: 'Kore' },
+              },
+            },
           },
           systemInstruction: {
             parts: [{ text: 'You are a secure assistant. Respond concisely and clearly.' }],
-          },
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: { voiceName: 'Kore' },
-            },
           },
           inputAudioTranscription: {},
           outputAudioTranscription: {},
@@ -86,7 +96,7 @@ export class GeminiLiveBridge extends EventEmitter {
       };
 
       if (this.toolDeclarations.length > 0) {
-        setupMessage.setup.tools = this.toolDeclarations;
+        (setupMessage.setup as any).tools = this.toolDeclarations;
       }
 
       this.safeSend(JSON.stringify(setupMessage), 'setup');
@@ -124,7 +134,6 @@ export class GeminiLiveBridge extends EventEmitter {
 
       if (serverContent?.interrupted) {
         this.emit('audio-buffer-flush');
-        // An interrupted turn is still ledger-worthy — flush whatever accumulated.
         this.emitInteractionComplete();
       }
 
@@ -136,18 +145,18 @@ export class GeminiLiveBridge extends EventEmitter {
 
       const outputText: string | undefined = serverContent?.outputTranscription?.text;
       if (outputText) {
-          this.pendingModelResponse += outputText;
-          this.broadcastToAllWindows('ai-text-token', outputText);
-          this.emit('ai-text-token', outputText);
+        this.pendingModelResponse += outputText;
+        this.broadcastToAllWindows('ai-text-token', outputText);
+        this.emit('ai-text-token', outputText);
       }
 
       const parts: any[] | undefined = serverContent?.modelTurn?.parts;
       if (Array.isArray(parts)) {
         for (const part of parts) {
           if (part.text) {
-              this.pendingModelResponse += part.text;
-              this.broadcastToAllWindows('ai-text-token', part.text);
-              this.emit('ai-text-token', part.text);
+            this.pendingModelResponse += part.text;
+            this.broadcastToAllWindows('ai-text-token', part.text);
+            this.emit('ai-text-token', part.text);
           }
 
           const inlineData = part?.inlineData;
@@ -169,13 +178,22 @@ export class GeminiLiveBridge extends EventEmitter {
       }
 
       if (payload?.setupComplete) {
+        console.log('[geminiLiveBridge] Setup complete - session ready');
         this.sessionReady = true;
         this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
         this.emit('setup-complete');
       }
+
+      // Log errors from server
+      if (payload?.error) {
+        console.error('[geminiLiveBridge] Server error:', payload.error);
+        this.setConnectionState('ERROR');
+        this.ws?.terminate();
+      }
     });
 
-    this.ws.on('close', () => {
+    this.ws.on('close', (code, reason) => {
+      console.log(`[geminiLiveBridge] WebSocket closed: code=${code}, reason=${reason.toString()}`);
       this.connected = false;
       this.sessionReady = false;
       this.setConnectionState('DISCONNECTED');
@@ -188,6 +206,7 @@ export class GeminiLiveBridge extends EventEmitter {
     });
 
     this.ws.on('error', (err: Error) => {
+      console.error('[geminiLiveBridge] WebSocket error:', err.message);
       this.connected = false;
       this.sessionReady = false;
       this.setConnectionState('ERROR');
