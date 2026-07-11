@@ -1,0 +1,67 @@
+{
+  "name": "nova-genesis-core",
+  "version": "1.0.0",
+  "description": "NOVA Genesis Personal Operating Intelligence System",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "vite --config vite.config.mts",
+    "dev:dual": "node ./scripts/dev-dual.js",
+    "build": "tsc -p tsconfig.main.json && vite build --config vite.config.mts",
+    "electron:start": "tsc -p tsconfig.main.json && electron .",
+    "electron:package": "npm run build && electron-builder --publish=never"
+  },
+  "build": {
+    "appId": "com.nova.genesis",
+    "productName": "Nova Genesis",
+    "directories": {
+      "output": "dist_electron",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "native_modules/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "native_modules/",
+        "to": "native_modules",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    }
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "hls.js": "^1.6.2",
+    "lucide-react": "^0.468.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "sqlite3": "^5.1.7",
+    "three": "^0.170.0",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@electron/rebuild": "^4.2.0",
+    "@tailwindcss/vite": "^4.0.0-beta.1",
+    "@types/node": "^26.1.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.169.0",
+    "@types/ws": "^8.18.1",
+    "@vitejs/plugin-react": "^4.3.1",
+    "electron": "^32.0.0",
+    "electron-builder": "^24.13.3",
+    "node-gyp": "^13.0.1",
+    "tailwindcss": "^4.0.0-beta.1",
+    "typescript": "^5.4.5",
+    "vite": "^5.3.1"
+  }
+}

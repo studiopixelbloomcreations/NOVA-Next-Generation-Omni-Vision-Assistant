@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/dev/**)",
+      "Bash(git -C /Users/dev/workspace-06d88dd5 log --oneline -10)",
+      "Bash(git -C /Users/dev/workspace-06d88dd5 status --short)",
+      "Bash(sed -E 's/=\\(.{0,6}\\).*/= [value starts: \\\\1... - REDACTED]/')",
+      "Bash(awk -F= '/^[A-Za-z_]+=/ {print $1\" length=\"length\\(substr\\($0, index\\($0,\"=\"\\)+1\\)\\)}' \"/c/Users/thenu/Downloads/NOVA Genesis/.env\")"
+    ]
+  }
+}
