@@ -1,11 +1,12 @@
 // src/main/services/agent_orchestrator.ts
 import { EventEmitter } from 'events';
-import fs from 'fs';
-import path from 'path';
-import vm from 'vm';
-import crypto from 'crypto';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as crypto from 'crypto';
+import * as vm from 'vm';
 import { geminiLiveBridge } from './gemini_live_bridge';
 import { BrowserWindow } from 'electron';
+import { performSecurityAudit } from '../utils/security';
 
 type FunctionResponsePayload = {
   id: string;
@@ -26,6 +27,7 @@ export interface IToolDefinition {
   compiledFn: Function | null;
   status: 'pending' | 'compiled' | 'failed';
   createdAt: number;
+  permissions: ToolPermission[];
 }
 
 export interface IProgressStep {
@@ -47,21 +49,10 @@ export type ToolSynthesisPhase =
   | 'COMPLETED'
   | 'FAILED';
 
-const BLOCKED_KEYWORDS: string[] = [
-  'process.exit',
-  'process.env',
-  'fs.rmSync',
-  'child_process',
-  'require(',
-  'eval(',
-  'Function(',
-  'globalThis',
-];
-
-const INFINITE_LOOP_PATTERNS: RegExp[] = [
-  /while\s*\(\s*true\s*\)/,
-  /for\s*\(\s*;\s*;\s*\)/,
-];
+export interface ToolPermission {
+  type: 'fs-read' | 'fs-write' | 'net-http' | 'net-https' | 'child-process' | 'native-module';
+  scope: string[];
+}
 
 export class AgentOrchestrator extends EventEmitter {
   private toolRegistry: Map<string, IToolDefinition> = new Map();
@@ -225,17 +216,7 @@ export class AgentOrchestrator extends EventEmitter {
   }
 
   public performSecurityAudit(code: string): ISecurityAuditResult {
-    for (const keyword of BLOCKED_KEYWORDS) {
-      if (code.includes(keyword)) {
-        return { passed: false, reason: `Blocked keyword detected: "${keyword}"` };
-      }
-    }
-    for (const pattern of INFINITE_LOOP_PATTERNS) {
-      if (pattern.test(code)) {
-        return { passed: false, reason: `Potential infinite loop detected: ${pattern.source}` };
-      }
-    }
-    return { passed: true };
+    return performSecurityAudit(code);
   }
 
   public getToolDeclarations(): unknown[] {
@@ -407,9 +388,9 @@ Rules:
       throw err;
     }
 
-    // Phase 4: Compile assets
+    // Phase 4: Security audit
     this.setPhase('COMPILING_ASSETS');
-    this.emitProgressStep('Compiling and sandboxing assets...', 'active');
+    this.emitProgressStep('Auditing and sandbox-compiling assets...', 'active');
 
     const audit = this.performSecurityAudit(generatedJS);
     if (!audit.passed) {
@@ -464,7 +445,8 @@ Rules:
       sourceCode: generatedJS,
       compiledFn,
       status: 'compiled',
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      permissions: [],
     };
 
     this.toolRegistry.set(toolId, toolDef);
@@ -490,12 +472,6 @@ Rules:
           description: toolDef.description,
           status: toolDef.status,
           payload
-        });
-
-        // Also emit the phase updates
-        win.webContents.send('tool-synthesis-phase', {
-          phase: this.currentPhase,
-          steps: this.activeProgressSteps
         });
       }
     }
@@ -613,6 +589,10 @@ Rules:
 
   public getProgressSteps(): IProgressStep[] {
     return [...this.activeProgressSteps];
+  }
+
+  public getToolRegistry(): Map<string, IToolDefinition> {
+    return this.toolRegistry;
   }
 }
 

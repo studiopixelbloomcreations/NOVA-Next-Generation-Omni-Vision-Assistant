@@ -96,8 +96,6 @@ export class ScreenCapturer extends EventEmitter {
           const size = thumbnail.getSize();
           frameWidth = size.width;
           frameHeight = size.height;
-          // Raw BGRA bytes — the block hasher indexes the pixel grid directly,
-          // which is only valid on uncompressed bitmap data.
           const bitmap = thumbnail.toBitmap();
           currHashes = this.calculateBlockHashes(bitmap, frameWidth, frameHeight, BLOCK_SIZE);
         }

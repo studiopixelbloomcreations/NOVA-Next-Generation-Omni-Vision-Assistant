@@ -15,6 +15,7 @@ export class AudioRecorder {
   private stream: MediaStream | null = null;
   private processor: ScriptProcessorNode | null = null;
   private source: MediaStreamAudioSourceNode | null = null;
+  private vadWorklet: AudioWorkletNode | null = null;
 
   // Ensure the audio context exists and is resumed. Can be called from a user gesture.
   public async resumeAudio(): Promise<void> {
@@ -30,18 +31,30 @@ export class AudioRecorder {
     }
   }
 
-  public async startRecording(onAmplitudeUpdate: (amp: number) => void): Promise<void> {
+  public async startRecording(
+    onAmplitudeUpdate: (amp: number) => void,
+    onVadResult: (isSpeech: boolean, probability: number) => void
+  ): Promise<void> {
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Ensure the audio context exists and is resumed. This may need a user gesture.
+      this.stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          sampleRate: 16000,
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        }
+      });
+      
       await this.resumeAudio();
       if (!this.audioCtx) {
         this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
       }
-      this.source = this.audioCtx.createMediaStreamSource(this.stream);
       
-      // Use 2048 buffer size for real-time low latency
-      this.processor = this.audioCtx.createScriptProcessor(2048, 1, 1);
+      this.source = this.audioCtx.createMediaStreamSource(this.stream);
+
+      // Use 512 sample buffer for ~32ms frames at 16kHz (good for VAD)
+      this.processor = this.audioCtx.createScriptProcessor(512, 1, 1);
       
       this.source.connect(this.processor);
       this.processor.connect(this.audioCtx.destination);
@@ -49,7 +62,7 @@ export class AudioRecorder {
       this.processor.onaudioprocess = (e) => {
         const inputData = e.inputBuffer.getChannelData(0);
         
-        // Compute amplitude RMS
+        // Compute amplitude RMS for UI
         let sum = 0;
         for (let i = 0; i < inputData.length; i++) {
           sum += inputData[i] * inputData[i];
@@ -64,12 +77,12 @@ export class AudioRecorder {
           pcmBuffer[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
         }
 
+        // Send PCM to main process for VAD processing
         if (ipcRenderer) {
-          // Send Node Buffer over IPC to the main process
           const buf = Buffer.from(pcmBuffer.buffer);
           ipcRenderer.send('user-audio-chunk', buf);
         } else {
-          // Browser fallback: encode to base64 and send as realtimeInput.audio JSON
+          // Browser fallback
           const u8 = new Uint8Array(pcmBuffer.buffer);
           let binary = '';
           for (let i = 0; i < u8.length; i++) {
@@ -85,7 +98,6 @@ export class AudioRecorder {
               },
             },
           };
-
           browserBridge.sendRaw(message);
         }
       };
@@ -97,11 +109,13 @@ export class AudioRecorder {
 
   public stopRecording(): void {
     if (this.processor) {
-      // Release the onaudioprocess closure (and its captured stream) before
-      // disconnecting, so the graph doesn't keep the microphone alive.
       this.processor.onaudioprocess = null;
       this.processor.disconnect();
       this.processor = null;
+    }
+    if (this.vadWorklet) {
+      this.vadWorklet.disconnect();
+      this.vadWorklet = null;
     }
     if (this.source) {
       this.source.disconnect();

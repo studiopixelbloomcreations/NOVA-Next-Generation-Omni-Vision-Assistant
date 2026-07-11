@@ -1,4 +1,3 @@
-import './env';
 import { app, BrowserWindow, ipcMain, screen, desktopCapturer } from 'electron';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
@@ -10,6 +9,7 @@ import {
 } from '../shared/ipc_protocols';
 import { screenCapturer } from './ingestors/screen_capturer';
 import { voiceProcessor } from './ingestors/voice_processor';
+import { wakeWordDetector } from './ingestors/wake_word_detector';
 import { contextEngine } from './services/context_engine';
 import { geminiLiveBridge } from './services/gemini_live_bridge';
 import { agentOrchestrator } from './services/agent_orchestrator';
@@ -203,7 +203,20 @@ graphEngine.on('ready', () => {
   completeBootStep('3');
 });
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  // Initialize wake word detector
+  await wakeWordDetector.initialize();
+  wakeWordDetector.start();
+  wakeWordDetector.on('wake-word-detected', (event) => {
+    console.log('[main] Wake word detected, prepending audio buffer to stream');
+    // Send the buffered audio to Gemini
+    if (geminiLiveBridge.isConnected()) {
+      geminiLiveBridge.sendAudioChunk(Buffer.from(event.buffer.buffer));
+    }
+    // Notify renderer
+    sendToRenderer('wake-word-detected', { keyword: event.keyword, timestamp: event.timestamp });
+  });
+
   // Phase 2: Electron Hardware Lifecycle Bypass - Media Permission Handler
   app.on('web-contents-created', (_event, contents) => {
     contents.session.setPermissionRequestHandler((_wc, permission, callback) => {
