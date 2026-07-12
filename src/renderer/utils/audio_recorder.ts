@@ -31,10 +31,7 @@ export class AudioRecorder {
     }
   }
 
-  public async startRecording(
-    onAmplitudeUpdate: (amp: number) => void,
-    onVadResult: (isSpeech: boolean, probability: number) => void
-  ): Promise<void> {
+  public async startRecording(onAmplitudeUpdate: (amp: number) => void): Promise<void> {
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
