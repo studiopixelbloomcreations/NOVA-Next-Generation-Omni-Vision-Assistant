@@ -1,0 +1,13 @@
+node_modules/
+dist/
+dist_electron/
+out/
+*.log
+*.exe
+*.asar
+*.dll
+.env
+.env.*
+*.db
+*.db-wal
+*.db-shm
