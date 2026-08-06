@@ -41,7 +41,7 @@ class BrowserBridge {
       const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
       const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
       this.url = url || (window as any).__GEMINI_WS_URL__ || wsUrl;
-    } catch (e) {
+    } catch {
       this.url = url || 'ws://localhost:3000/ws';
     }
   }

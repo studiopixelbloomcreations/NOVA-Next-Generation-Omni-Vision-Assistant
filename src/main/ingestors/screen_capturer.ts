@@ -6,7 +6,7 @@ import { screen, desktopCapturer } from 'electron';
 let nativeModule: any = null;
 try {
   nativeModule = require('../../../native_modules/index.node');
-} catch (e) {
+} catch {
   console.warn(
     'Native Rust module index.node not found. Utilizing JavaScript block-hash fallback.',
   );

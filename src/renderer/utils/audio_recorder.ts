@@ -4,7 +4,7 @@ try {
   if (typeof window !== 'undefined' && (window as any).require) {
     ipcRenderer = (window as any).require('electron').ipcRenderer;
   }
-} catch (e) {
+} catch {
   ipcRenderer = null;
 }
 
@@ -28,8 +28,8 @@ export class AudioRecorder {
       if (this.audioCtx.state === 'suspended') {
         await this.audioCtx.resume();
       }
-    } catch (e) {
-      console.warn('resumeAudio failed:', e);
+    } catch {
+      console.warn('resumeAudio failed');
     }
   }
 
