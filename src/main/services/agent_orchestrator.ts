@@ -37,7 +37,7 @@ export interface IProgressStep {
   timestamp: number;
 }
 
-export type ToolSynthesisPhase = 
+export type ToolSynthesisPhase =
   | 'IDLE'
   | 'SEARCHING_REGISTRY'
   | 'TOOL_NOT_FOUND'
@@ -71,10 +71,10 @@ export class AgentOrchestrator extends EventEmitter {
           parameters: {
             type: 'OBJECT',
             properties: {
-              prompt: { type: 'STRING', description: 'The description of the object to generate.' }
+              prompt: { type: 'STRING', description: 'The description of the object to generate.' },
             },
-            required: ['prompt']
-          }
+            required: ['prompt'],
+          },
         },
         {
           name: 'run_web_agent',
@@ -83,10 +83,13 @@ export class AgentOrchestrator extends EventEmitter {
           parameters: {
             type: 'OBJECT',
             properties: {
-              prompt: { type: 'STRING', description: 'The detailed instructions for the web browser agent.' }
+              prompt: {
+                type: 'STRING',
+                description: 'The detailed instructions for the web browser agent.',
+              },
             },
-            required: ['prompt']
-          }
+            required: ['prompt'],
+          },
         },
         {
           name: 'create_project',
@@ -94,10 +97,10 @@ export class AgentOrchestrator extends EventEmitter {
           parameters: {
             type: 'OBJECT',
             properties: {
-              name: { type: 'STRING', description: 'The name of the new project.' }
+              name: { type: 'STRING', description: 'The name of the new project.' },
             },
-            required: ['name']
-          }
+            required: ['name'],
+          },
         },
         {
           name: 'switch_project',
@@ -105,10 +108,10 @@ export class AgentOrchestrator extends EventEmitter {
           parameters: {
             type: 'OBJECT',
             properties: {
-              name: { type: 'STRING', description: 'The name of the project to switch to.' }
+              name: { type: 'STRING', description: 'The name of the project to switch to.' },
             },
-            required: ['name']
-          }
+            required: ['name'],
+          },
         },
         {
           name: 'list_projects',
@@ -116,15 +119,16 @@ export class AgentOrchestrator extends EventEmitter {
           parameters: {
             type: 'OBJECT',
             properties: {},
-          }
+          },
         },
         {
           name: 'list_smart_devices',
-          description: 'Lists all available smart home devices (lights, plugs, etc.) on the network.',
+          description:
+            'Lists all available smart home devices (lights, plugs, etc.) on the network.',
           parameters: {
             type: 'OBJECT',
             properties: {},
-          }
+          },
         },
         {
           name: 'control_light',
@@ -132,13 +136,23 @@ export class AgentOrchestrator extends EventEmitter {
           parameters: {
             type: 'OBJECT',
             properties: {
-              target: { type: 'STRING', description: 'The IP address of the device to control. Always prefer the IP address over the alias for reliability.' },
-              action: { type: 'STRING', description: "The action to perform: 'turn_on', 'turn_off', or 'set'." },
+              target: {
+                type: 'STRING',
+                description:
+                  'The IP address of the device to control. Always prefer the IP address over the alias for reliability.',
+              },
+              action: {
+                type: 'STRING',
+                description: "The action to perform: 'turn_on', 'turn_off', or 'set'.",
+              },
               brightness: { type: 'INTEGER', description: 'Optional brightness level (0-100).' },
-              color: { type: 'STRING', description: "Optional color name (e.g., 'red', 'cool white') or 'warm'." }
+              color: {
+                type: 'STRING',
+                description: "Optional color name (e.g., 'red', 'cool white') or 'warm'.",
+              },
             },
-            required: ['target', 'action']
-          }
+            required: ['target', 'action'],
+          },
         },
         {
           name: 'discover_printers',
@@ -146,31 +160,36 @@ export class AgentOrchestrator extends EventEmitter {
           parameters: {
             type: 'OBJECT',
             properties: {},
-          }
+          },
         },
         {
           name: 'print_stl',
-          description: 'Prints an STL file to a 3D printer. Handles slicing the STL to G-code and uploading to the printer.',
+          description:
+            'Prints an STL file to a 3D printer. Handles slicing the STL to G-code and uploading to the printer.',
           parameters: {
             type: 'OBJECT',
             properties: {
-              stl_path: { type: 'STRING', description: "Path to STL file, or 'current' for the most recent CAD model." },
+              stl_path: {
+                type: 'STRING',
+                description: "Path to STL file, or 'current' for the most recent CAD model.",
+              },
               printer: { type: 'STRING', description: 'Printer name or IP address.' },
-              profile: { type: 'STRING', description: 'Optional slicer profile name.' }
+              profile: { type: 'STRING', description: 'Optional slicer profile name.' },
             },
-            required: ['stl_path', 'printer']
-          }
+            required: ['stl_path', 'printer'],
+          },
         },
         {
           name: 'get_print_status',
-          description: 'Gets the current status of a 3D printer including progress, time remaining, and temperatures.',
+          description:
+            'Gets the current status of a 3D printer including progress, time remaining, and temperatures.',
           parameters: {
             type: 'OBJECT',
             properties: {
-              printer: { type: 'STRING', description: 'Printer name or IP address.' }
+              printer: { type: 'STRING', description: 'Printer name or IP address.' },
             },
-            required: ['printer']
-          }
+            required: ['printer'],
+          },
         },
         {
           name: 'iterate_cad',
@@ -179,13 +198,16 @@ export class AgentOrchestrator extends EventEmitter {
           parameters: {
             type: 'OBJECT',
             properties: {
-              prompt: { type: 'STRING', description: 'The changes or modifications to apply to the current design.' }
+              prompt: {
+                type: 'STRING',
+                description: 'The changes or modifications to apply to the current design.',
+              },
             },
-            required: ['prompt']
-          }
+            required: ['prompt'],
+          },
         },
-      ]
-    }
+      ],
+    },
   ];
 
   constructor(apiKey: string) {
@@ -237,7 +259,7 @@ export class AgentOrchestrator extends EventEmitter {
         functionResponses.push({
           id: fc?.id ?? crypto.randomUUID(),
           name: fc?.name ?? 'unknown_tool',
-          response: { error: err?.message ?? 'Tool execution failed' }
+          response: { error: err?.message ?? 'Tool execution failed' },
         });
       }
     }
@@ -257,7 +279,7 @@ export class AgentOrchestrator extends EventEmitter {
         return {
           id,
           name,
-          response: { result: `${name} started asynchronously.` }
+          response: { result: `${name} started asynchronously.` },
         };
 
       case 'write_file': {
@@ -299,20 +321,29 @@ export class AgentOrchestrator extends EventEmitter {
       }
 
       case 'list_projects': {
-        const folders = fs.readdirSync(this.projectRoot, { withFileTypes: true })
-          .filter((entry) => entry.isDirectory())
-          .map((entry) => entry.name);
+        const folders = fs
+          .readdirSync(this.projectRoot, { withFileTypes: true })
+          .filter(entry => entry.isDirectory())
+          .map(entry => entry.name);
         return { id, name, response: { result: folders.join('\n') } };
       }
 
       case 'list_smart_devices':
       case 'discover_printers':
-        return { id, name, response: { result: 'Device discovery is not available in this runtime.' } };
+        return {
+          id,
+          name,
+          response: { result: 'Device discovery is not available in this runtime.' },
+        };
 
       case 'control_light':
       case 'print_stl':
       case 'get_print_status':
-        return { id, name, response: { result: `${name} is not supported by this local Electron runtime.` } };
+        return {
+          id,
+          name,
+          response: { result: `${name} is not supported by this local Electron runtime.` },
+        };
 
       default:
         return { id, name, response: { result: `Unhandled tool: ${name}` } };
@@ -372,10 +403,14 @@ Rules:
 - Choose a real, publicly accessible live stream URL appropriate to the user request`;
 
       generatedJS = await this.queryGeminiModel(prompt);
-      
+
       // Sanitise clean code
-      generatedJS = generatedJS.replace(/^```javascript\n/, '').replace(/^```\n/, '').replace(/```$/, '').trim();
-      
+      generatedJS = generatedJS
+        .replace(/^```javascript\n/, '')
+        .replace(/^```\n/, '')
+        .replace(/```$/, '')
+        .trim();
+
       const match = generatedJS.match(/function\s+(\w+)/);
       if (match && match[1]) {
         toolName = match[1];
@@ -407,7 +442,14 @@ Rules:
       });
 
       const sandbox = vm.createContext({
-        Date, Math, JSON, Array, Object, String, Number, Boolean
+        Date,
+        Math,
+        JSON,
+        Array,
+        Object,
+        String,
+        Number,
+        Boolean,
       });
 
       const runResult = script.runInContext(sandbox, { timeout: 2000 });
@@ -471,7 +513,7 @@ Rules:
           name: toolDef.name,
           description: toolDef.description,
           status: toolDef.status,
-          payload
+          payload,
         });
       }
     }
@@ -490,7 +532,7 @@ Rules:
       if (!win.isDestroyed()) {
         win.webContents.send('tool-synthesis-phase', {
           phase: this.currentPhase,
-          steps: this.activeProgressSteps
+          steps: this.activeProgressSteps,
         });
       }
     }
@@ -540,8 +582,8 @@ Rules:
       timeoutTimer = setTimeout(() => {
         reject(
           new Error(
-            `queryGeminiModel timed out after ${TIMEOUT_MS}ms — no completed text stream from the live session.`
-          )
+            `queryGeminiModel timed out after ${TIMEOUT_MS}ms — no completed text stream from the live session.`,
+          ),
         );
       }, TIMEOUT_MS);
     });
@@ -554,16 +596,16 @@ Rules:
       stepId: crypto.randomUUID(),
       label,
       status,
-      timestamp: Date.now()
+      timestamp: Date.now(),
     };
     this.activeProgressSteps.push(step);
-    
+
     const windows = BrowserWindow.getAllWindows();
     for (const win of windows) {
       if (!win.isDestroyed()) {
         win.webContents.send('agent-progress-update', {
           step,
-          allSteps: this.activeProgressSteps
+          allSteps: this.activeProgressSteps,
         });
       }
     }

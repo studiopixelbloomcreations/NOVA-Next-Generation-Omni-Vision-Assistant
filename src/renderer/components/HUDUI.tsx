@@ -4,7 +4,11 @@ import { Sidebar, IProgressStep } from './Sidebar';
 import { CenterHUD } from './CenterHUD';
 import { RightPanel, ITranscriptEntry } from './RightPanel';
 import { WebGLWaveform } from './WebGLWaveform';
-import { NovaVoiceState, ISystemTelemetryPayload, IContextChipPayload } from '../../shared/ipc_protocols';
+import {
+  NovaVoiceState,
+  ISystemTelemetryPayload,
+  IContextChipPayload,
+} from '../../shared/ipc_protocols';
 
 interface HUDUIProps {
   voiceState: NovaVoiceState;
@@ -41,7 +45,6 @@ export const HUDUI: React.FC<HUDUIProps> = ({
 }) => {
   return (
     <div className="w-screen h-screen bg-[#020205] flex flex-col relative overflow-hidden text-white font-rajdhani select-none border border-blue-500/10">
-      
       {/* Background radial highlight */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(10,35,80,0.04)_0%,rgba(0,0,0,0)_80%)] pointer-events-none" />
 
@@ -49,7 +52,11 @@ export const HUDUI: React.FC<HUDUIProps> = ({
       <div className="flex-1 flex overflow-hidden">
         {/* LEFT SIDEBAR NAVIGATION & PROGRESS TRACKING */}
         <div className="relative z-10 flex-shrink-0">
-          <Sidebar onTabChange={() => {}} progressSteps={progressSteps} geminiState={telemetry?.geminiState} />
+          <Sidebar
+            onTabChange={() => {}}
+            progressSteps={progressSteps}
+            geminiState={telemetry?.geminiState}
+          />
         </div>
 
         {/* CENTER USER WORKSPACE CONSOLE (Main Interface Window replaces orb) */}
@@ -87,7 +94,6 @@ export const HUDUI: React.FC<HUDUIProps> = ({
           height={120}
         />
       </div>
-
     </div>
   );
 };

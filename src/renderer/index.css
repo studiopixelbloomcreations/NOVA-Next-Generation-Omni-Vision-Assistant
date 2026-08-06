@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @layer base {
   body {
@@ -34,7 +34,7 @@
 
 /* Linear/Radial Gold Gradients */
 .text-gold {
-  background: linear-gradient(135deg, #D4AF37 0%, #AA7C11 100%);
+  background: linear-gradient(135deg, #d4af37 0%, #aa7c11 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
@@ -49,7 +49,8 @@
 
 /* Glowing Animations */
 @keyframes pulseGlow {
-  0%, 100% {
+  0%,
+  100% {
     opacity: 0.3;
     transform: scale(1);
   }

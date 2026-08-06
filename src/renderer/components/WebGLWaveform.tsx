@@ -60,7 +60,7 @@ export const WebGLWaveform: React.FC<WebGLWaveformProps> = ({
     for (let i = 0; i < maxParticles; i++) {
       particles.push({
         x: Math.random() * canvas.width,
-        y: (canvas.height / 2) + (Math.random() - 0.5) * 40,
+        y: canvas.height / 2 + (Math.random() - 0.5) * 40,
         vx: (Math.random() - 0.5) * 0.4,
         vy: (Math.random() - 0.5) * 0.15,
         alpha: 0.15 + Math.random() * 0.7,
@@ -142,7 +142,14 @@ export const WebGLWaveform: React.FC<WebGLWaveformProps> = ({
       purpleGlow.addColorStop(1, 'rgba(168, 85, 247, 0)');
 
       // Draw background glow spot at the center
-      const radialGlow = ctx.createRadialGradient(w / 2, centerY, 5, w / 2, centerY, Math.min(w / 2, 260));
+      const radialGlow = ctx.createRadialGradient(
+        w / 2,
+        centerY,
+        5,
+        w / 2,
+        centerY,
+        Math.min(w / 2, 260),
+      );
       radialGlow.addColorStop(0, `rgba(0, 180, 255, ${0.14 * combinedAmp})`);
       radialGlow.addColorStop(0.5, `rgba(140, 50, 255, ${0.05 * combinedAmp})`);
       radialGlow.addColorStop(1, 'rgba(0,0,0,0)');
@@ -160,7 +167,7 @@ export const WebGLWaveform: React.FC<WebGLWaveformProps> = ({
       for (let l = 0; l < waveLayers; l++) {
         ctx.beginPath();
         const layerOffset = l * (Math.PI / 4);
-        const thickness = l === 0 ? 2.4 : 0.8 + (l * 0.35);
+        const thickness = l === 0 ? 2.4 : 0.8 + l * 0.35;
         ctx.lineWidth = thickness;
 
         if (l % 2 === 0) {
@@ -181,7 +188,7 @@ export const WebGLWaveform: React.FC<WebGLWaveformProps> = ({
 
           // Bi-directional amplitude weight (read from refs)
           const ampModifier = (1 - relativeX) * currentUserAmp + relativeX * currentAiAmp + 0.05;
-          
+
           // Basic horizontal sine calculation
           const theta = relativeX * Math.PI * 3 * waveComplexity + time + layerOffset;
           let yOffset = Math.sin(theta) * 32 * ampModifier * envelope;
@@ -223,9 +230,13 @@ export const WebGLWaveform: React.FC<WebGLWaveformProps> = ({
         const relativeX = x / w;
         const envelope = Math.sin(relativeX * Math.PI);
         const ampModifier = (1 - relativeX) * currentUserAmp + relativeX * currentAiAmp + 0.04;
-        
-        const yTop = centerY - Math.abs(Math.sin(relativeX * Math.PI * 2.8 + time) * 38 * ampModifier * envelope);
-        const yBottom = centerY + Math.abs(Math.cos(relativeX * Math.PI * 2.8 - time) * 38 * ampModifier * envelope);
+
+        const yTop =
+          centerY -
+          Math.abs(Math.sin(relativeX * Math.PI * 2.8 + time) * 38 * ampModifier * envelope);
+        const yBottom =
+          centerY +
+          Math.abs(Math.cos(relativeX * Math.PI * 2.8 - time) * 38 * ampModifier * envelope);
 
         ctx.moveTo(x, yTop);
         ctx.lineTo(x, yBottom);
@@ -235,7 +246,7 @@ export const WebGLWaveform: React.FC<WebGLWaveformProps> = ({
       // ────────────────────────────────────────────────────────
       // Layer D: Particle Mist (warped by frequency offsets)
       // ────────────────────────────────────────────────────────
-      particles.forEach((p) => {
+      particles.forEach(p => {
         if (p.x < 0 || p.x > w) {
           p.x = Math.random() * w;
           p.y = centerY + (Math.random() - 0.5) * 20;
@@ -253,7 +264,7 @@ export const WebGLWaveform: React.FC<WebGLWaveformProps> = ({
           p.y = centerY + (Math.random() - 0.5) * maxOffset * 0.82;
         }
 
-        ctx.fillStyle = p.color + (p.alpha * (0.35 + ampModifier * 0.65)) + ')';
+        ctx.fillStyle = p.color + p.alpha * (0.35 + ampModifier * 0.65) + ')';
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
         ctx.fill();

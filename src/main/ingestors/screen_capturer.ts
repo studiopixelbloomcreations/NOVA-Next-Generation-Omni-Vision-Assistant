@@ -7,7 +7,9 @@ let nativeModule: any = null;
 try {
   nativeModule = require('../../../native_modules/index.node');
 } catch (e) {
-  console.warn('Native Rust module index.node not found. Utilizing JavaScript block-hash fallback.');
+  console.warn(
+    'Native Rust module index.node not found. Utilizing JavaScript block-hash fallback.',
+  );
 }
 
 const BLOCK_SIZE = 128;
@@ -85,7 +87,12 @@ export class ScreenCapturer extends EventEmitter {
         const buffer: Buffer = nativeModule.capture_frame();
         frameWidth = requestWidth;
         frameHeight = requestHeight;
-        currHashes = nativeModule.calculateBlock_hashes(buffer, frameWidth, frameHeight, BLOCK_SIZE);
+        currHashes = nativeModule.calculateBlock_hashes(
+          buffer,
+          frameWidth,
+          frameHeight,
+          BLOCK_SIZE,
+        );
       } else {
         const sources = await desktopCapturer.getSources({
           types: ['screen'],
@@ -122,7 +129,10 @@ export class ScreenCapturer extends EventEmitter {
     } catch (err) {
       if (!this.hasLoggedCaptureError) {
         this.hasLoggedCaptureError = true;
-        console.error('[screen_capturer] capture cycle failed (suppressing repeats until recovery):', err);
+        console.error(
+          '[screen_capturer] capture cycle failed (suppressing repeats until recovery):',
+          err,
+        );
       }
     } finally {
       if (this.isCapturing) {
@@ -133,7 +143,12 @@ export class ScreenCapturer extends EventEmitter {
     }
   }
 
-  private calculateBlockHashes(buffer: Buffer, width: number, height: number, blockSize: number): number[] {
+  private calculateBlockHashes(
+    buffer: Buffer,
+    width: number,
+    height: number,
+    blockSize: number,
+  ): number[] {
     const cols = Math.ceil(width / blockSize);
     const rows = Math.ceil(height / blockSize);
     const hashes: number[] = [];

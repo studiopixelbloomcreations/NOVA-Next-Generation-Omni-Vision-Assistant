@@ -37,10 +37,10 @@ const bootSteps: IBootStep[] = [
 
 // Global safety nets: a rejected background promise (DB write, capture cycle)
 // must never take the whole desktop process down silently.
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', reason => {
   console.error('[main] unhandled promise rejection:', reason);
 });
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', err => {
   console.error('[main] uncaught exception:', err);
 });
 
@@ -55,13 +55,13 @@ function broadcastBootSteps(): void {
 }
 
 function completeBootStep(stepId: string): void {
-  const step = bootSteps.find((s) => s.stepId === stepId);
+  const step = bootSteps.find(s => s.stepId === stepId);
   if (!step || step.status === 'completed') return;
 
   step.status = 'completed';
   step.timestamp = Date.now();
 
-  const next = bootSteps.find((s) => s.status === 'pending');
+  const next = bootSteps.find(s => s.status === 'pending');
   if (next) {
     next.status = 'active';
     next.timestamp = Date.now();
@@ -180,22 +180,27 @@ function registerGeminiBridgeHandlers(): void {
   // Persist every completed conversational turn into the interaction ledger.
   geminiLiveBridge.on(
     'interaction-complete',
-    (interaction: { transcriptInput: string; responseOutput: string; latencyMs: number; timestamp: number }) => {
+    (interaction: {
+      transcriptInput: string;
+      responseOutput: string;
+      latencyMs: number;
+      timestamp: number;
+    }) => {
       const uuid = randomUUID();
       interactionLedger.insertInteraction({
-          uuid,
-          timestamp_epoch: interaction.timestamp,
-          interaction_type: 'voice_loop',
-          raw_transcript_input: interaction.transcriptInput,
-          model_response_output: interaction.responseOutput,
-          context_snapshot_json: JSON.stringify({
-            chips: latestChips.chips,
-            telemetry: buildTelemetryPayload(),
-          }),
-          embedding_vector_id: `v_${uuid}`,
-          performance_latency_ms: interaction.latencyMs,
-        });
-    }
+        uuid,
+        timestamp_epoch: interaction.timestamp,
+        interaction_type: 'voice_loop',
+        raw_transcript_input: interaction.transcriptInput,
+        model_response_output: interaction.responseOutput,
+        context_snapshot_json: JSON.stringify({
+          chips: latestChips.chips,
+          telemetry: buildTelemetryPayload(),
+        }),
+        embedding_vector_id: `v_${uuid}`,
+        performance_latency_ms: interaction.latencyMs,
+      });
+    },
   );
 }
 
@@ -207,7 +212,7 @@ app.whenReady().then(async () => {
   // Initialize wake word detector
   await wakeWordDetector.initialize();
   wakeWordDetector.start();
-  wakeWordDetector.on('wake-word-detected', (event) => {
+  wakeWordDetector.on('wake-word-detected', event => {
     console.log('[main] Wake word detected, prepending audio buffer to stream');
     // Send the buffered audio to Gemini
     if (geminiLiveBridge.isConnected()) {
@@ -357,7 +362,10 @@ app.whenReady().then(async () => {
       // only engage it when the intent actually asks for one.
       if (/\b(stream|video|news|watch|feed|live|tv|broadcast)\b/i.test(commandText)) {
         const toolDef = await agentOrchestrator.generateToolFromIntent(commandText);
-        return { success: true, tool: { id: toolDef.id, name: toolDef.name, status: toolDef.status } };
+        return {
+          success: true,
+          tool: { id: toolDef.id, name: toolDef.name, status: toolDef.status },
+        };
       }
       return { success: true };
     } catch (e: unknown) {

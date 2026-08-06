@@ -13,7 +13,8 @@ import { ITranscriptEntry } from './renderer/components/RightPanel';
 import { browserBridge } from './renderer/utils/browser_bridge';
 
 // Check if running in Electron environment
-const isElectron = typeof window !== 'undefined' && window.process && (window.process as any).type === 'renderer';
+const isElectron =
+  typeof window !== 'undefined' && window.process && (window.process as any).type === 'renderer';
 const ipcRenderer = isElectron ? (window as any).require('electron').ipcRenderer : null;
 
 export const App: React.FC = () => {
@@ -42,42 +43,43 @@ export const App: React.FC = () => {
     // Time-based hysteresis: entering LISTENING is instant, but returning to
     // IDLE requires 600ms of sustained silence so per-buffer amplitude dips
     // don't flap the state machine (and spam the main process).
-    audioRecorder.startRecording((amp) => {
-      setAmplitude(amp);
+    audioRecorder
+      .startRecording(amp => {
+        setAmplitude(amp);
 
-      setVoiceState((prev) => {
-        if (amp > 0.12 && prev === 'IDLE') {
-          if (silenceTimerRef.current) {
+        setVoiceState(prev => {
+          if (amp > 0.12 && prev === 'IDLE') {
+            if (silenceTimerRef.current) {
+              clearTimeout(silenceTimerRef.current);
+              silenceTimerRef.current = null;
+            }
+            if (ipcRenderer) {
+              ipcRenderer.send('user-speaking-active', true);
+            }
+            return 'LISTENING';
+          }
+          if (amp > 0.12 && prev === 'LISTENING' && silenceTimerRef.current) {
+            // Speech resumed before the silence window elapsed.
             clearTimeout(silenceTimerRef.current);
             silenceTimerRef.current = null;
           }
-          if (ipcRenderer) {
-            ipcRenderer.send('user-speaking-active', true);
+          if (amp <= 0.04 && prev === 'LISTENING' && !silenceTimerRef.current) {
+            silenceTimerRef.current = setTimeout(() => {
+              silenceTimerRef.current = null;
+              if (ipcRenderer) {
+                ipcRenderer.send('user-speaking-active', false);
+              }
+              setVoiceState(current => (current === 'LISTENING' ? 'IDLE' : current));
+            }, 600);
           }
-          return 'LISTENING';
-        }
-        if (amp > 0.12 && prev === 'LISTENING' && silenceTimerRef.current) {
-          // Speech resumed before the silence window elapsed.
-          clearTimeout(silenceTimerRef.current);
-          silenceTimerRef.current = null;
-        }
-        if (amp <= 0.04 && prev === 'LISTENING' && !silenceTimerRef.current) {
-          silenceTimerRef.current = setTimeout(() => {
-            silenceTimerRef.current = null;
-            if (ipcRenderer) {
-              ipcRenderer.send('user-speaking-active', false);
-            }
-            setVoiceState((current) => (current === 'LISTENING' ? 'IDLE' : current));
-          }, 600);
-        }
-        return prev;
+          return prev;
+        });
+      })
+      .catch(err => {
+        console.error('Microphone capture failed to start:', err);
       });
-    }).catch((err) => {
-      console.error('Microphone capture failed to start:', err);
-    });
 
     if (ipcRenderer) {
-
       // IPC listeners for voice changes and amplitude updates from Main process
       const onVoiceState = (_event: any, payload: IVoiceStatePayload) => {
         setVoiceState(payload.currentState);
@@ -102,8 +104,8 @@ export const App: React.FC = () => {
 
       const onToolCreated = (_event: any, payload: any) => {
         if (payload) {
-          setCreatedTools((prev) => {
-            const exists = prev.some((t) => t.id === payload.id);
+          setCreatedTools(prev => {
+            const exists = prev.some(t => t.id === payload.id);
             if (exists) return prev;
             return [...prev, payload];
           });
@@ -114,7 +116,9 @@ export const App: React.FC = () => {
       const onAiAudioChunk = (_event: any, chunk: any) => {
         try {
           if (!audioCtxRef.current) {
-            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
+              sampleRate: 24000,
+            });
             nextStartTimeRef.current = audioCtxRef.current.currentTime;
           }
           const audioCtx = audioCtxRef.current;
@@ -124,7 +128,10 @@ export const App: React.FC = () => {
 
           // IPC delivers Buffer as Uint8Array. Ensure we have an ArrayBuffer view.
           const uint8Array = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
-          const arrayBuffer = uint8Array.buffer.slice(uint8Array.byteOffset, uint8Array.byteOffset + uint8Array.byteLength);
+          const arrayBuffer = uint8Array.buffer.slice(
+            uint8Array.byteOffset,
+            uint8Array.byteOffset + uint8Array.byteLength,
+          );
           const dataView = new DataView(arrayBuffer);
           const sampleCount = Math.floor(arrayBuffer.byteLength / 2);
           const floatData = new Float32Array(sampleCount);
@@ -151,7 +158,7 @@ export const App: React.FC = () => {
 
           activeSourcesRef.current.push(source);
           source.onended = () => {
-            activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
+            activeSourcesRef.current = activeSourcesRef.current.filter(s => s !== source);
           };
         } catch (err) {
           console.error('Error playing AI audio chunk:', err);
@@ -160,7 +167,7 @@ export const App: React.FC = () => {
 
       const onAudioBufferFlush = () => {
         nextStartTimeRef.current = 0;
-        activeSourcesRef.current.forEach((source) => {
+        activeSourcesRef.current.forEach(source => {
           try {
             source.stop();
           } catch {
@@ -172,7 +179,7 @@ export const App: React.FC = () => {
       };
 
       const onAiTextToken = (_event: any, token: string) => {
-        setTranscripts((prev) => {
+        setTranscripts(prev => {
           if (prev.length === 0 || prev[prev.length - 1].sender !== 'NOVA AI') {
             return [...prev, { sender: 'NOVA AI', text: token }];
           }
@@ -186,7 +193,7 @@ export const App: React.FC = () => {
       };
 
       const onUserTextTranscribed = (_event: any, text: string) => {
-        setTranscripts((prev) => [...prev, { sender: 'USER', text }]);
+        setTranscripts(prev => [...prev, { sender: 'USER', text }]);
       };
 
       const onBootLifecycle = (_event: any, steps: any) => {
@@ -211,7 +218,9 @@ export const App: React.FC = () => {
       ipcRenderer.on('agent-tool-synthesis-phase', (_event: any, payload: any) => {
         if (payload) {
           setToolSynthesisPhase(payload.phase);
-          setShowToolSynthesis(payload.phase !== 'IDLE' && payload.phase !== 'COMPLETED' && payload.phase !== 'FAILED');
+          setShowToolSynthesis(
+            payload.phase !== 'IDLE' && payload.phase !== 'COMPLETED' && payload.phase !== 'FAILED',
+          );
         }
       });
       ipcRenderer.on('agent-tool-synthesis-steps', (_event: any, payload: any) => {
@@ -251,85 +260,90 @@ export const App: React.FC = () => {
         }
       };
     } else {
-        // Browser runtime: wire up browserBridge events
-        const onAiAudioChunk = (chunk: any) => {
-          try {
-            if (!audioCtxRef.current) {
-              audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
-              nextStartTimeRef.current = audioCtxRef.current.currentTime;
-            }
-            const audioCtx = audioCtxRef.current!;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
-
-            // browserBridge delivers ArrayBuffer or Uint8Array
-            const uint8Array = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
-            const arrayBuffer = uint8Array.buffer.slice(uint8Array.byteOffset, uint8Array.byteOffset + uint8Array.byteLength);
-            const dataView = new DataView(arrayBuffer);
-            const sampleCount = Math.floor(arrayBuffer.byteLength / 2);
-            const floatData = new Float32Array(sampleCount);
-
-            for (let i = 0; i < sampleCount; i++) {
-              const sample = dataView.getInt16(i * 2, true);
-              floatData[i] = sample / 32768;
-            }
-
-            const audioBuffer = audioCtx.createBuffer(1, sampleCount, 24000);
-            audioBuffer.copyToChannel(floatData, 0);
-
-            const source = audioCtx.createBufferSource();
-            source.buffer = audioBuffer;
-            source.connect(audioCtx.destination);
-
-            const now = audioCtx.currentTime;
-            if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05;
-            source.start(nextStartTimeRef.current);
-            nextStartTimeRef.current += audioBuffer.duration;
-
-            activeSourcesRef.current.push(source);
-            source.onended = () => {
-              activeSourcesRef.current = activeSourcesRef.current.filter((s) => s !== source);
-            };
-          } catch (err) {
-            console.error('Error playing AI audio chunk (browser):', err);
+      // Browser runtime: wire up browserBridge events
+      const onAiAudioChunk = (chunk: any) => {
+        try {
+          if (!audioCtxRef.current) {
+            audioCtxRef.current = new (window.AudioContext || (window as any).webkitAudioContext)({
+              sampleRate: 24000,
+            });
+            nextStartTimeRef.current = audioCtxRef.current.currentTime;
           }
-        };
+          const audioCtx = audioCtxRef.current!;
+          if (audioCtx.state === 'suspended') audioCtx.resume();
 
-        const onAiTextToken = (token: string) => {
-          setTranscripts((prev) => {
-            if (prev.length === 0 || prev[prev.length - 1].sender !== 'NOVA AI') {
-              return [...prev, { sender: 'NOVA AI', text: token }];
-            }
-            const updated = [...prev];
-            updated[updated.length - 1] = {
-              ...updated[updated.length - 1],
-              text: updated[updated.length - 1].text + token,
-            };
-            return updated;
-          });
-        };
+          // browserBridge delivers ArrayBuffer or Uint8Array
+          const uint8Array = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
+          const arrayBuffer = uint8Array.buffer.slice(
+            uint8Array.byteOffset,
+            uint8Array.byteOffset + uint8Array.byteLength,
+          );
+          const dataView = new DataView(arrayBuffer);
+          const sampleCount = Math.floor(arrayBuffer.byteLength / 2);
+          const floatData = new Float32Array(sampleCount);
 
-        const onUserTextTranscribed = (text: string) => {
-          setTranscripts((prev) => [...prev, { sender: 'USER', text }]);
-        };
+          for (let i = 0; i < sampleCount; i++) {
+            const sample = dataView.getInt16(i * 2, true);
+            floatData[i] = sample / 32768;
+          }
 
-        const onConnected = () => {
-          // Clear any boot/loading progress and mark voice as idle — match Electron IPC behavior
-          setProgressSteps([]);
-          setVoiceState('IDLE');
-        };
+          const audioBuffer = audioCtx.createBuffer(1, sampleCount, 24000);
+          audioBuffer.copyToChannel(floatData, 0);
 
-        browserBridge.on('ai-audio-chunk', onAiAudioChunk);
-        browserBridge.on('ai-text-token', onAiTextToken);
-        browserBridge.on('user-text-transcribed', onUserTextTranscribed);
-        browserBridge.on('connected', onConnected);
+          const source = audioCtx.createBufferSource();
+          source.buffer = audioBuffer;
+          source.connect(audioCtx.destination);
 
-        return () => {
-          audioRecorder.stopRecording();
-          browserBridge.off('ai-audio-chunk', onAiAudioChunk);
-          browserBridge.off('ai-text-token', onAiTextToken);
-          browserBridge.off('user-text-transcribed', onUserTextTranscribed);
-          browserBridge.off('connected', onConnected);
-        };
+          const now = audioCtx.currentTime;
+          if (nextStartTimeRef.current < now) nextStartTimeRef.current = now + 0.05;
+          source.start(nextStartTimeRef.current);
+          nextStartTimeRef.current += audioBuffer.duration;
+
+          activeSourcesRef.current.push(source);
+          source.onended = () => {
+            activeSourcesRef.current = activeSourcesRef.current.filter(s => s !== source);
+          };
+        } catch (err) {
+          console.error('Error playing AI audio chunk (browser):', err);
+        }
+      };
+
+      const onAiTextToken = (token: string) => {
+        setTranscripts(prev => {
+          if (prev.length === 0 || prev[prev.length - 1].sender !== 'NOVA AI') {
+            return [...prev, { sender: 'NOVA AI', text: token }];
+          }
+          const updated = [...prev];
+          updated[updated.length - 1] = {
+            ...updated[updated.length - 1],
+            text: updated[updated.length - 1].text + token,
+          };
+          return updated;
+        });
+      };
+
+      const onUserTextTranscribed = (text: string) => {
+        setTranscripts(prev => [...prev, { sender: 'USER', text }]);
+      };
+
+      const onConnected = () => {
+        // Clear any boot/loading progress and mark voice as idle — match Electron IPC behavior
+        setProgressSteps([]);
+        setVoiceState('IDLE');
+      };
+
+      browserBridge.on('ai-audio-chunk', onAiAudioChunk);
+      browserBridge.on('ai-text-token', onAiTextToken);
+      browserBridge.on('user-text-transcribed', onUserTextTranscribed);
+      browserBridge.on('connected', onConnected);
+
+      return () => {
+        audioRecorder.stopRecording();
+        browserBridge.off('ai-audio-chunk', onAiAudioChunk);
+        browserBridge.off('ai-text-token', onAiTextToken);
+        browserBridge.off('user-text-transcribed', onUserTextTranscribed);
+        browserBridge.off('connected', onConnected);
+      };
     }
   }, []);
 
@@ -345,22 +359,25 @@ export const App: React.FC = () => {
   };
 
   const handleSearchSubmit = (text: string) => {
-    setTranscripts((prev) => [...prev, { sender: 'USER', text }]);
+    setTranscripts(prev => [...prev, { sender: 'USER', text }]);
     if (ipcRenderer) {
       ipcRenderer
         .invoke(NovaIpcChannel.TRIGGER_AUTOMATION, text)
         .then((res: any) => {
           if (res && res.success === false) {
-            setTranscripts((prev) => [
+            setTranscripts(prev => [
               ...prev,
               { sender: 'NOVA AI', text: `Automation failed: ${res.error ?? 'unknown error'}` },
             ]);
           }
         })
         .catch((err: unknown) => {
-          setTranscripts((prev) => [
+          setTranscripts(prev => [
             ...prev,
-            { sender: 'NOVA AI', text: `Automation dispatch failed: ${err instanceof Error ? err.message : String(err)}` },
+            {
+              sender: 'NOVA AI',
+              text: `Automation dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
+            },
           ]);
         });
     } else {

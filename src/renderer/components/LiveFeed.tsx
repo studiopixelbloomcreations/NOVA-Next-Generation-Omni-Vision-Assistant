@@ -2,7 +2,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ILiveStreamPayload } from '../../shared/ipc_protocols';
 
-const isElectron = typeof window !== 'undefined' && window.process && (window.process as any).type === 'renderer';
+const isElectron =
+  typeof window !== 'undefined' && window.process && (window.process as any).type === 'renderer';
 const ipcRenderer = isElectron ? (window as any).require('electron').ipcRenderer : null;
 
 interface LiveFeedProps {
@@ -66,15 +67,7 @@ const HlsPlayer: React.FC<{ streamUrl: string }> = ({ streamUrl }) => {
     );
   }
 
-  return (
-    <video
-      ref={videoRef}
-      autoPlay
-      muted
-      controls
-      className="w-full h-full"
-    />
-  );
+  return <video ref={videoRef} autoPlay muted controls className="w-full h-full" />;
 };
 
 export const LiveFeed: React.FC<LiveFeedProps> = ({ createdTools = [] }) => {

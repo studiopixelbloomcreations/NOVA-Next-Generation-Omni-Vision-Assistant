@@ -58,7 +58,9 @@ export class GeminiLiveBridge extends EventEmitter {
 
     // Validate API key format
     if (!this.apiKey.startsWith('AIzaSy')) {
-      console.warn('[geminiLiveBridge] GEMINI_API_KEY does not look like a valid Google AI Studio key (should start with AIzaSy)');
+      console.warn(
+        '[geminiLiveBridge] GEMINI_API_KEY does not look like a valid Google AI Studio key (should start with AIzaSy)',
+      );
     }
 
     // Correct endpoint: BidiGenerateContent with API key as query param
@@ -121,7 +123,10 @@ export class GeminiLiveBridge extends EventEmitter {
       } catch (err) {
         if (!this.malformedFrameLogged) {
           this.malformedFrameLogged = true;
-          console.error('[geminiLiveBridge] received malformed (non-JSON) frame; suppressing further malformed-frame logs until a valid frame arrives', err);
+          console.error(
+            '[geminiLiveBridge] received malformed (non-JSON) frame; suppressing further malformed-frame logs until a valid frame arrives',
+            err,
+          );
         }
         return;
       }
@@ -247,7 +252,9 @@ export class GeminiLiveBridge extends EventEmitter {
     this.safeSend(JSON.stringify(message), 'text message');
   }
 
-  public sendToolResponse(functionResponses: Array<{ id: string; name: string; response: unknown }>): void {
+  public sendToolResponse(
+    functionResponses: Array<{ id: string; name: string; response: unknown }>,
+  ): void {
     if (!this.ws || !this.connected) return;
     const message = {
       toolResponse: {
@@ -263,10 +270,12 @@ export class GeminiLiveBridge extends EventEmitter {
 
     const message = {
       realtimeInput: {
-        mediaChunks: [{
-          mimeType: 'image/jpeg',
-          data: base64Frame,
-        }],
+        mediaChunks: [
+          {
+            mimeType: 'image/jpeg',
+            data: base64Frame,
+          },
+        ],
       },
     };
 
@@ -404,7 +413,9 @@ export class GeminiLiveBridge extends EventEmitter {
       if (!this.ws || !this.connected) return;
 
       if (Date.now() - this.lastPongAt > STALE_CONNECTION_MS) {
-        console.error('[geminiLiveBridge] no pong within stale threshold; terminating socket to force reconnect');
+        console.error(
+          '[geminiLiveBridge] no pong within stale threshold; terminating socket to force reconnect',
+        );
         // terminate() fires 'close', which drives the reconnect path.
         this.ws.terminate();
         return;

@@ -102,7 +102,14 @@ export const CircularOrb: React.FC<CircularOrbProps> = ({
       time += speed;
 
       // Render radial back-glow
-      const radialGlow = ctx.createRadialGradient(cx, cy, baseRadius - 80, cx, cy, baseRadius + 120);
+      const radialGlow = ctx.createRadialGradient(
+        cx,
+        cy,
+        baseRadius - 80,
+        cx,
+        cy,
+        baseRadius + 120,
+      );
       radialGlow.addColorStop(0, 'rgba(0, 5, 20, 0)');
       radialGlow.addColorStop(0.5, `rgba(10, 70, 190, ${0.05 + amplitude * 0.08})`);
       radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0)');
@@ -120,13 +127,13 @@ export const CircularOrb: React.FC<CircularOrbProps> = ({
         const layerPhase = (l * Math.PI) / layers;
         const layerAmp = waveScale * (1 - l * 0.11);
         const opacity = 0.25 + (0.55 * (layers - l)) / layers;
-        
+
         if (l % 2 === 0) {
           ctx.strokeStyle = `rgba(56, 170, 255, ${opacity})`;
         } else {
           ctx.strokeStyle = `rgba(168, 85, 247, ${opacity * 0.85})`;
         }
-        ctx.lineWidth = 0.8 + (l * 0.35);
+        ctx.lineWidth = 0.8 + l * 0.35;
 
         for (let a = 0; a <= 360; a += 1) {
           const angle = (a * Math.PI) / 180;
@@ -134,11 +141,7 @@ export const CircularOrb: React.FC<CircularOrbProps> = ({
           const sinA = Math.sin(angle);
 
           // Calculate displacement using Fractal Brownian Motion
-          const noise = fbm(
-            cosA * complexity + layerPhase,
-            sinA * complexity - layerPhase,
-            time
-          );
+          const noise = fbm(cosA * complexity + layerPhase, sinA * complexity - layerPhase, time);
 
           // Add vocal resonance scaling directly to the radial offset
           const r = baseRadius + noise * layerAmp * (1.0 + amplitude * 1.5);
@@ -158,12 +161,12 @@ export const CircularOrb: React.FC<CircularOrbProps> = ({
       // Draw Orbiting Neural Particles (warped by vocal resonance offsets)
       ctx.shadowBlur = 4;
       ctx.shadowColor = '#ffffff';
-      particles.forEach((p) => {
+      particles.forEach(p => {
         p.angle += p.speed * (voiceState === 'REASONING' ? 2.5 : 1.0);
-        
+
         // Use fBm calculations to add micro-vibrations
         const noiseVal = fbm(Math.cos(p.angle) * 2, Math.sin(p.angle) * 2, time) * 10;
-        
+
         // Vocal Resonance Scaling: pushes particles outward when active
         const resonanceScale = 1.0 + amplitude * 2.2;
         const currentRadius = p.radius * resonanceScale + noiseVal;
@@ -190,12 +193,7 @@ export const CircularOrb: React.FC<CircularOrbProps> = ({
 
   return (
     <div className="relative flex items-center justify-center">
-      <canvas
-        ref={canvasRef}
-        width={width}
-        height={height}
-        className="max-w-full max-h-full"
-      />
+      <canvas ref={canvasRef} width={width} height={height} className="max-w-full max-h-full" />
     </div>
   );
 };

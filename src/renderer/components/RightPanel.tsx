@@ -22,7 +22,10 @@ const CHIP_SEVERITY_CLASSES: Record<IContextChipPayload['chips'][number]['severi
   critical: 'border-rose-500/50 text-rose-300/90',
 };
 
-function deriveSystemStatus(telemetry: ISystemTelemetryPayload | null): { label: string; className: string } {
+function deriveSystemStatus(telemetry: ISystemTelemetryPayload | null): {
+  label: string;
+  className: string;
+} {
   if (!telemetry) {
     return { label: '—', className: 'text-[#ffffff40]' };
   }
@@ -55,7 +58,6 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
   return (
     <div className="w-[320px] h-full border-l border-[#ffffff08] bg-[#02020540] p-6 flex flex-col gap-5 overflow-y-auto select-none">
-
       {/* SYSTEM STATUS CARD */}
       <div className="glass-base p-4 rounded-xl relative overflow-hidden flex-shrink-0">
         <div className="flex justify-between items-center">
@@ -63,7 +65,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             <h5 className="font-rajdhani text-[10px] font-bold tracking-[0.18em] text-[#ffffff50] uppercase">
               SYSTEM STATUS
             </h5>
-            <p className={`font-orbitron text-xs font-bold tracking-[0.1em] mt-1 uppercase ${systemStatus.className}`}>
+            <p
+              className={`font-orbitron text-xs font-bold tracking-[0.1em] mt-1 uppercase ${systemStatus.className}`}
+            >
               {systemStatus.label}
             </p>
           </div>
@@ -72,10 +76,10 @@ export const RightPanel: React.FC<RightPanelProps> = ({
               telemetry?.geminiState === 'CONNECTED'
                 ? 'bg-cyan-400 animate-pulse'
                 : telemetry?.geminiState === 'CONNECTING'
-                ? 'bg-amber-400 animate-pulse'
-                : telemetry
-                ? 'bg-rose-400'
-                : 'bg-[#ffffff20]'
+                  ? 'bg-amber-400 animate-pulse'
+                  : telemetry
+                    ? 'bg-rose-400'
+                    : 'bg-[#ffffff20]'
             }`}
           />
         </div>
@@ -89,7 +93,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           </h5>
           <div className="flex items-center gap-1.5 text-emerald-400">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-rajdhani text-[9px] font-bold tracking-[0.15em] uppercase">ONLINE</span>
+            <span className="font-rajdhani text-[9px] font-bold tracking-[0.15em] uppercase">
+              ONLINE
+            </span>
           </div>
         </div>
 
@@ -107,7 +113,9 @@ export const RightPanel: React.FC<RightPanelProps> = ({
         <div className="flex-1 overflow-y-auto flex flex-col gap-3 pr-1">
           {transcripts.length === 0 ? (
             <div className="flex items-center justify-center h-full text-[#ffffff20] text-center p-4">
-              <span className="font-rajdhani text-[10px] font-bold tracking-[0.1em] uppercase">No active transcription stream</span>
+              <span className="font-rajdhani text-[10px] font-bold tracking-[0.1em] uppercase">
+                No active transcription stream
+              </span>
             </div>
           ) : (
             transcripts.map((entry, idx) => (
@@ -146,16 +154,20 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
         {contextChips.length === 0 ? (
           <div className="text-[#ffffff20] text-center py-2">
-            <span className="font-rajdhani text-[10px] font-bold tracking-[0.1em] uppercase">No active context</span>
+            <span className="font-rajdhani text-[10px] font-bold tracking-[0.1em] uppercase">
+              No active context
+            </span>
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5">
-            {contextChips.map((chip) => (
+            {contextChips.map(chip => (
               <div
                 key={chip.id}
                 className={`bg-[#ffffff02] border px-2 py-1 rounded-full flex items-center gap-1.5 transition-all ${CHIP_SEVERITY_CLASSES[chip.severity]}`}
               >
-                <span className="font-rajdhani text-[10px] font-bold tracking-[0.02em]">{chip.label}</span>
+                <span className="font-rajdhani text-[10px] font-bold tracking-[0.02em]">
+                  {chip.label}
+                </span>
               </div>
             ))}
           </div>
@@ -172,23 +184,26 @@ export const RightPanel: React.FC<RightPanelProps> = ({
 
         {createdTools.length === 0 ? (
           <div className="text-[#ffffff20] text-center py-2">
-            <span className="font-rajdhani text-[10px] font-bold tracking-[0.1em] uppercase">No synthesized tools yet</span>
+            <span className="font-rajdhani text-[10px] font-bold tracking-[0.1em] uppercase">
+              No synthesized tools yet
+            </span>
           </div>
         ) : (
           <div className="flex flex-wrap gap-1.5 max-h-[140px] overflow-y-auto pr-1">
-            {createdTools.map((tool) => (
+            {createdTools.map(tool => (
               <div
                 key={tool.id}
                 className="bg-emerald-500/5 border border-emerald-500/20 hover:border-emerald-400 px-2 py-1 rounded-lg flex items-center gap-1.5 transition-all cursor-pointer"
               >
                 <Terminal size={10} className="text-emerald-400" />
-                <span className="font-rajdhani text-[10px] font-bold text-emerald-300 tracking-[0.02em]">{tool.name}</span>
+                <span className="font-rajdhani text-[10px] font-bold text-emerald-300 tracking-[0.02em]">
+                  {tool.name}
+                </span>
               </div>
             ))}
           </div>
         )}
       </div>
-
     </div>
   );
 };

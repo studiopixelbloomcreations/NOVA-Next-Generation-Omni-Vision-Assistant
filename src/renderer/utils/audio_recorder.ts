@@ -21,7 +21,9 @@ export class AudioRecorder {
   public async resumeAudio(): Promise<void> {
     try {
       if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
+          sampleRate: 16000,
+        });
       }
       if (this.audioCtx.state === 'suspended') {
         await this.audioCtx.resume();
@@ -33,32 +35,34 @@ export class AudioRecorder {
 
   public async startRecording(onAmplitudeUpdate: (amp: number) => void): Promise<void> {
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({ 
+      this.stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           sampleRate: 16000,
           channelCount: 1,
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-        }
+        },
       });
-      
+
       await this.resumeAudio();
       if (!this.audioCtx) {
-        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+        this.audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)({
+          sampleRate: 16000,
+        });
       }
-      
+
       this.source = this.audioCtx.createMediaStreamSource(this.stream);
 
       // Use 512 sample buffer for ~32ms frames at 16kHz (good for VAD)
       this.processor = this.audioCtx.createScriptProcessor(512, 1, 1);
-      
+
       this.source.connect(this.processor);
       this.processor.connect(this.audioCtx.destination);
 
-      this.processor.onaudioprocess = (e) => {
+      this.processor.onaudioprocess = e => {
         const inputData = e.inputBuffer.getChannelData(0);
-        
+
         // Compute amplitude RMS for UI
         let sum = 0;
         for (let i = 0; i < inputData.length; i++) {
@@ -71,7 +75,7 @@ export class AudioRecorder {
         const pcmBuffer = new Int16Array(inputData.length);
         for (let i = 0; i < inputData.length; i++) {
           const sample = Math.max(-1, Math.min(1, inputData[i]));
-          pcmBuffer[i] = sample < 0 ? sample * 0x8000 : sample * 0x7FFF;
+          pcmBuffer[i] = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
         }
 
         // Send PCM to main process for VAD processing
@@ -85,7 +89,8 @@ export class AudioRecorder {
           for (let i = 0; i < u8.length; i++) {
             binary += String.fromCharCode(u8[i]);
           }
-          const base64 = (typeof btoa === 'function') ? btoa(binary) : Buffer.from(u8).toString('base64');
+          const base64 =
+            typeof btoa === 'function' ? btoa(binary) : Buffer.from(u8).toString('base64');
 
           const message = {
             realtimeInput: {

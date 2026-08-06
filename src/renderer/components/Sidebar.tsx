@@ -35,10 +35,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
 
   const connection =
     geminiState === 'CONNECTED'
-      ? { label: 'ONLINE', text: 'text-emerald-400/70', ping: 'bg-emerald-400', dot: 'bg-emerald-500' }
+      ? {
+          label: 'ONLINE',
+          text: 'text-emerald-400/70',
+          ping: 'bg-emerald-400',
+          dot: 'bg-emerald-500',
+        }
       : geminiState === 'CONNECTING'
-      ? { label: 'LINKING', text: 'text-amber-400/70', ping: 'bg-amber-400', dot: 'bg-amber-500' }
-      : { label: 'OFFLINE', text: 'text-rose-400/70', ping: 'bg-rose-400', dot: 'bg-rose-500' };
+        ? { label: 'LINKING', text: 'text-amber-400/70', ping: 'bg-amber-400', dot: 'bg-amber-500' }
+        : { label: 'OFFLINE', text: 'text-rose-400/70', ping: 'bg-rose-400', dot: 'bg-rose-500' };
 
   const completedCount = progressSteps.filter(s => s.status === 'completed').length;
   const totalSteps = progressSteps.length;
@@ -105,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
 
               {/* Stepper text items */}
               <div className="flex flex-col gap-5 pl-5">
-                {progressSteps.map((step) => {
+                {progressSteps.map(step => {
                   const isActive = step.status === 'active';
                   const isCompleted = step.status === 'completed';
 
@@ -117,13 +122,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
                           isCompleted
                             ? 'bg-emerald-500/20 border border-emerald-500/40'
                             : isActive
-                            ? 'bg-cyan-500/20 border border-cyan-500/50'
-                            : 'bg-[#ffffff03] border border-[#ffffff08]'
+                              ? 'bg-cyan-500/20 border border-cyan-500/50'
+                              : 'bg-[#ffffff03] border border-[#ffffff08]'
                         }`}
                       >
                         <div
                           className={`w-[4px] h-[4px] rounded-full ${
-                            isCompleted ? 'bg-emerald-400' : isActive ? 'bg-cyan-400' : 'bg-[#ffffff10]'
+                            isCompleted
+                              ? 'bg-emerald-400'
+                              : isActive
+                                ? 'bg-cyan-400'
+                                : 'bg-[#ffffff10]'
                           }`}
                         />
                       </div>
@@ -136,8 +145,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
                             isCompleted
                               ? 'text-emerald-400/90'
                               : isActive
-                              ? 'text-cyan-300'
-                              : 'text-[#ffffff20]'
+                                ? 'text-cyan-300'
+                                : 'text-[#ffffff20]'
                           }`}
                         >
                           {step.label}
@@ -157,8 +166,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
         <div className="flex items-center gap-3">
           <div className="w-[32px] h-[32px] rounded-lg bg-[radial-gradient(circle_at_center,rgba(56,132,255,0.3)_0%,rgba(0,0,0,0.5)_100%)] border border-blue-500/20 flex items-center justify-center relative">
             <span className="absolute top-1 right-1 flex h-1.5 w-1.5">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${connection.ping}`}></span>
-              <span className={`relative inline-flex rounded-full h-1.5 w-1.5 ${connection.dot}`}></span>
+              <span
+                className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${connection.ping}`}
+              ></span>
+              <span
+                className={`relative inline-flex rounded-full h-1.5 w-1.5 ${connection.dot}`}
+              ></span>
             </span>
             <div className="w-2.5 h-2.5 bg-blue-400 rotate-45 rounded-sm" />
           </div>
@@ -166,7 +179,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
             <h4 className="font-rajdhani text-[11px] font-bold tracking-[0.1em] text-[#f5f8ff] uppercase">
               NOVA AI
             </h4>
-            <p className={`font-rajdhani text-[9px] font-medium tracking-[0.05em] uppercase ${connection.text}`}>
+            <p
+              className={`font-rajdhani text-[9px] font-medium tracking-[0.05em] uppercase ${connection.text}`}
+            >
               {connection.label}
             </p>
           </div>

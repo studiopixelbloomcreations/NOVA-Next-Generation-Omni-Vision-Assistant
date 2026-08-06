@@ -45,11 +45,13 @@ export class SqliteAdapter {
     `);
 
     // Migration: ensure created_at column exists
-    const columns = this.db.prepare("PRAGMA table_info(interaction_ledger)").all() as any[];
+    const columns = this.db.prepare('PRAGMA table_info(interaction_ledger)').all() as any[];
     const hasCreatedAt = columns.some((col: any) => col.name === 'created_at');
     if (!hasCreatedAt) {
       console.log('[sqlite_adapter] Adding missing created_at column to interaction_ledger');
-      this.db.exec(`ALTER TABLE interaction_ledger ADD COLUMN created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000);`);
+      this.db.exec(
+        `ALTER TABLE interaction_ledger ADD COLUMN created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now') * 1000);`,
+      );
       this.db.exec(`CREATE INDEX IF NOT EXISTS idx_created_at ON interaction_ledger(created_at);`);
     }
 
@@ -73,29 +75,33 @@ export class SqliteAdapter {
       entry.model_response_output,
       entry.context_snapshot_json,
       entry.embedding_vector_id,
-      entry.performance_latency_ms
+      entry.performance_latency_ms,
     );
   }
 
   public getInteractions(limit: number = 50): IInteractionLedgerEntry[] {
     const db = this.ensureDb();
-    return db.prepare(
-      'SELECT * FROM interaction_ledger ORDER BY timestamp_epoch DESC LIMIT ?'
-    ).all(limit) as IInteractionLedgerEntry[];
+    return db
+      .prepare('SELECT * FROM interaction_ledger ORDER BY timestamp_epoch DESC LIMIT ?')
+      .all(limit) as IInteractionLedgerEntry[];
   }
 
   public getInteractionsByType(type: string, limit: number = 50): IInteractionLedgerEntry[] {
     const db = this.ensureDb();
-    return db.prepare(
-      'SELECT * FROM interaction_ledger WHERE interaction_type = ? ORDER BY timestamp_epoch DESC LIMIT ?'
-    ).all(type, limit) as IInteractionLedgerEntry[];
+    return db
+      .prepare(
+        'SELECT * FROM interaction_ledger WHERE interaction_type = ? ORDER BY timestamp_epoch DESC LIMIT ?',
+      )
+      .all(type, limit) as IInteractionLedgerEntry[];
   }
 
   public getInteractionsSince(sinceEpoch: number, limit: number = 100): IInteractionLedgerEntry[] {
     const db = this.ensureDb();
-    return db.prepare(
-      'SELECT * FROM interaction_ledger WHERE timestamp_epoch >= ? ORDER BY timestamp_epoch DESC LIMIT ?'
-    ).all(sinceEpoch, limit) as IInteractionLedgerEntry[];
+    return db
+      .prepare(
+        'SELECT * FROM interaction_ledger WHERE timestamp_epoch >= ? ORDER BY timestamp_epoch DESC LIMIT ?',
+      )
+      .all(sinceEpoch, limit) as IInteractionLedgerEntry[];
   }
 
   public close(): void {

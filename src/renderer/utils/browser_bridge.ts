@@ -80,7 +80,7 @@ class BrowserBridge {
         this.emitInternal('connected');
       };
 
-      this.ws.onmessage = (ev) => {
+      this.ws.onmessage = ev => {
         try {
           if (typeof ev.data === 'string') {
             this.handleJsonFrame(ev.data);
@@ -102,7 +102,7 @@ class BrowserBridge {
         this.scheduleReconnect();
       };
 
-      this.ws.onerror = (err) => {
+      this.ws.onerror = err => {
         this.emitInternal('error', err);
       };
     } catch (e) {
@@ -139,7 +139,11 @@ class BrowserBridge {
     if (Array.isArray(parts)) {
       for (const part of parts) {
         const inline = part?.inlineData;
-        if (inline?.data && typeof inline.data === 'string' && (inline.mimeType ?? '').startsWith('audio/')) {
+        if (
+          inline?.data &&
+          typeof inline.data === 'string' &&
+          (inline.mimeType ?? '').startsWith('audio/')
+        ) {
           this.emitInternal('ai-audio-chunk', base64ToArrayBuffer(inline.data));
         } else if (part?.text) {
           this.emitInternal('ai-text-token', part.text);
@@ -165,7 +169,9 @@ class BrowserBridge {
       this.outbound.shift();
       if (!this.overflowLogged) {
         this.overflowLogged = true;
-        console.warn(`[browser_bridge] outbound queue overflow (>${OUTBOUND_QUEUE_MAX}); dropping oldest frames`);
+        console.warn(
+          `[browser_bridge] outbound queue overflow (>${OUTBOUND_QUEUE_MAX}); dropping oldest frames`,
+        );
       }
     }
     this.outbound.push(frame);
@@ -194,7 +200,10 @@ class BrowserBridge {
 
   public off(event: string, cb: EventHandler) {
     const list = this.handlers.get(event) || [];
-    this.handlers.set(event, list.filter((f) => f !== cb));
+    this.handlers.set(
+      event,
+      list.filter(f => f !== cb),
+    );
   }
 
   public sendRaw(obj: any) {

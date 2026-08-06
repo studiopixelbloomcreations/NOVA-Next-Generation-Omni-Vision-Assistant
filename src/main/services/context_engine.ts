@@ -10,13 +10,8 @@ const TITLE_MAX_LENGTH = 40;
 let powershellProcess: ChildProcess | null = null;
 
 function startPowerShellSession(): ChildProcess | null {
-  const ps = spawn('powershell', [
-    '-NoProfile',
-    '-NonInteractive',
-    '-Command',
-    '-'
-  ], {
-    windowsHide: true
+  const ps = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', '-'], {
+    windowsHide: true,
   });
 
   // Attach stdout handler immediately to catch __NOVA_READY__
@@ -27,19 +22,21 @@ function startPowerShellSession(): ChildProcess | null {
 
   ps.stdout?.on('data', (data: Buffer) => {
     (ps as any).outputBuffer += data.toString();
-    
+
     while ((ps as any).outputBuffer.includes('__NOVA_READY__')) {
       const idx = (ps as any).outputBuffer.indexOf('__NOVA_READY__');
       (ps as any).outputBuffer = (ps as any).outputBuffer.slice(idx + '__NOVA_READY__'.length);
       (ps as any).ready = true;
       console.log('[context_engine] PowerShell session ready');
     }
-    
+
     while ((ps as any).outputBuffer.includes('__NOVA_QUERY_COMPLETE__')) {
       const idx = (ps as any).outputBuffer.indexOf('__NOVA_QUERY_COMPLETE__');
       const result = (ps as any).outputBuffer.slice(0, idx).trim();
-      (ps as any).outputBuffer = (ps as any).outputBuffer.slice(idx + '__NOVA_QUERY_COMPLETE__'.length);
-      
+      (ps as any).outputBuffer = (ps as any).outputBuffer.slice(
+        idx + '__NOVA_QUERY_COMPLETE__'.length,
+      );
+
       if ((ps as any).pendingResolve) {
         (ps as any).pendingResolve(result);
         (ps as any).pendingResolve = null;
@@ -52,7 +49,7 @@ function startPowerShellSession(): ChildProcess | null {
     console.error('[context_engine] PowerShell stderr:', data.toString());
   });
 
-  ps.on('error', (err) => {
+  ps.on('error', err => {
     console.error('[context_engine] PowerShell process error:', err);
     (ps as any).ready = false;
     if ((ps as any).pendingReject) {
@@ -62,7 +59,7 @@ function startPowerShellSession(): ChildProcess | null {
     }
   });
 
-  ps.on('exit', (code) => {
+  ps.on('exit', code => {
     console.error('[context_engine] PowerShell process exited with code:', code);
     (ps as any).ready = false;
     if ((ps as any).pendingReject) {
@@ -111,10 +108,12 @@ Write-Output "__NOVA_READY__"
 function ensurePowerShellSession(): Promise<ChildProcess> {
   if (!powershellProcess || !(powershellProcess as any).ready) {
     if (powershellProcess) {
-      try { powershellProcess.kill(); } catch {}
+      try {
+        powershellProcess.kill();
+      } catch {}
     }
     powershellProcess = startPowerShellSession();
-    
+
     // Wait for initialization
     return new Promise((resolve, reject) => {
       const checkReady = setInterval(() => {
@@ -123,7 +122,7 @@ function ensurePowerShellSession(): Promise<ChildProcess> {
           resolve(powershellProcess!);
         }
       }, 50);
-      
+
       setTimeout(() => {
         clearInterval(checkReady);
         reject(new Error('PowerShell session initialization timeout'));
@@ -160,7 +159,9 @@ Write-Output "__NOVA_QUERY_COMPLETE__"
         (ps as any).pendingReject = null;
         reject(new Error('PowerShell query timeout'));
         // Force restart on timeout
-        try { ps.kill(); } catch {}
+        try {
+          ps.kill();
+        } catch {}
         powershellProcess = null;
       }
     }, 2500);
@@ -188,7 +189,9 @@ export class ContextEngine extends EventEmitter {
       this.pollTimer = null;
     }
     if (powershellProcess) {
-      try { powershellProcess.kill(); } catch {}
+      try {
+        powershellProcess.kill();
+      } catch {}
       powershellProcess = null;
     }
   }
@@ -197,7 +200,11 @@ export class ContextEngine extends EventEmitter {
     return { chips: [...this.currentChips] };
   }
 
-  public calculateRank(similarity: number, pathDistance: number, lastAccessedEpoch: number): number {
+  public calculateRank(
+    similarity: number,
+    pathDistance: number,
+    lastAccessedEpoch: number,
+  ): number {
     const elapsedSeconds = (Date.now() - lastAccessedEpoch) / 1000;
     return graphEngine.calculateContextRank(similarity, pathDistance, elapsedSeconds);
   }
@@ -238,11 +245,16 @@ export class ContextEngine extends EventEmitter {
     } catch (err) {
       if (!this.hasLoggedPollError) {
         this.hasLoggedPollError = true;
-        console.error('[context_engine] foreground window poll failed (suppressing repeats until recovery):', err);
+        console.error(
+          '[context_engine] foreground window poll failed (suppressing repeats until recovery):',
+          err,
+        );
       }
       // Force restart PowerShell session on error
       if (powershellProcess) {
-        try { powershellProcess.kill(); } catch {}
+        try {
+          powershellProcess.kill();
+        } catch {}
         powershellProcess = null;
       }
     } finally {

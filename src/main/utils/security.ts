@@ -59,8 +59,14 @@ export function performSecurityAudit(code: string): { passed: boolean; reason?: 
         // Check for dangerous function calls
         if (node.callee.type === 'Identifier') {
           const dangerousFunctions = [
-            'eval', 'Function', 'setTimeout', 'setInterval', 'setImmediate',
-            'process.exit', 'process.kill', 'process.killProcess',
+            'eval',
+            'Function',
+            'setTimeout',
+            'setInterval',
+            'setImmediate',
+            'process.exit',
+            'process.kill',
+            'process.killProcess',
           ];
           if (dangerousFunctions.includes(node.callee.name)) {
             throw new Error(`Dangerous function call detected: ${node.callee.name}`);
@@ -71,9 +77,22 @@ export function performSecurityAudit(code: string): { passed: boolean; reason?: 
           if (node.arguments[0].type === 'Literal' && typeof node.arguments[0].value === 'string') {
             const module = node.arguments[0].value;
             const dangerousModules = [
-              'child_process', 'fs', 'net', 'dgram', 'tls', 'crypto',
-              'cluster', 'worker_threads', 'perf_hooks', 'inspector',
-              'v8', 'vm', 'os', 'path', 'url', 'querystring',
+              'child_process',
+              'fs',
+              'net',
+              'dgram',
+              'tls',
+              'crypto',
+              'cluster',
+              'worker_threads',
+              'perf_hooks',
+              'inspector',
+              'v8',
+              'vm',
+              'os',
+              'path',
+              'url',
+              'querystring',
             ];
             if (dangerousModules.includes(module)) {
               throw new Error(`Dangerous module import detected: ${module}`);
@@ -84,9 +103,22 @@ export function performSecurityAudit(code: string): { passed: boolean; reason?: 
       ImportDeclaration(node: any) {
         const source = node.source.value;
         const dangerousModules = [
-          'child_process', 'fs', 'net', 'dgram', 'tls', 'crypto',
-          'cluster', 'worker_threads', 'perf_hooks', 'inspector',
-          'v8', 'vm', 'os', 'path', 'url', 'querystring',
+          'child_process',
+          'fs',
+          'net',
+          'dgram',
+          'tls',
+          'crypto',
+          'cluster',
+          'worker_threads',
+          'perf_hooks',
+          'inspector',
+          'v8',
+          'vm',
+          'os',
+          'path',
+          'url',
+          'querystring',
         ];
         if (dangerousModules.includes(source)) {
           throw new Error(`Dangerous module import detected: ${source}`);
@@ -113,28 +145,53 @@ export class SecurityScanner extends EventEmitter {
   private dangerousModules: string[];
   private dangerousFunctions: string[];
 
-  constructor(options: {
-    blockedKeywords?: string[];
-    blockedPatterns?: RegExp[];
-    dangerousModules?: string[];
-    dangerousFunctions?: string[];
-  } = {}) {
+  constructor(
+    options: {
+      blockedKeywords?: string[];
+      blockedPatterns?: RegExp[];
+      dangerousModules?: string[];
+      dangerousFunctions?: string[];
+    } = {},
+  ) {
     super();
     this.blockedKeywords = options.blockedKeywords || [
-      'process.exit', 'process.env', 'fs.rmSync', 'fs.unlinkSync',
-      'child_process', 'require(', 'eval(', 'Function(', 'globalThis',
+      'process.exit',
+      'process.env',
+      'fs.rmSync',
+      'fs.unlinkSync',
+      'child_process',
+      'require(',
+      'eval(',
+      'Function(',
+      'globalThis',
     ];
     this.blockedPatterns = options.blockedPatterns || [
       /while\s*\(\s*true\s*\)/,
       /for\s*\(\s*;\s*;\s*\)/,
     ];
     this.dangerousModules = options.dangerousModules || [
-      'child_process', 'fs', 'net', 'dgram', 'tls', 'crypto',
-      'cluster', 'worker_threads', 'vm', 'os', 'inspector',
+      'child_process',
+      'fs',
+      'net',
+      'dgram',
+      'tls',
+      'crypto',
+      'cluster',
+      'worker_threads',
+      'vm',
+      'os',
+      'inspector',
     ];
     this.dangerousFunctions = options.dangerousFunctions || [
-      'eval', 'Function', 'setTimeout', 'setInterval', 'setImmediate',
-      'process.exit', 'process.kill', 'vm.runInContext', 'vm.runInNewContext',
+      'eval',
+      'Function',
+      'setTimeout',
+      'setInterval',
+      'setImmediate',
+      'process.exit',
+      'process.kill',
+      'vm.runInContext',
+      'vm.runInNewContext',
     ];
   }
 
@@ -172,7 +229,10 @@ export class SecurityScanner extends EventEmitter {
             }
           }
           if (_node.callee.name === 'require' && _node.arguments.length > 0) {
-            if (_node.arguments[0].type === 'Literal' && typeof _node.arguments[0].value === 'string') {
+            if (
+              _node.arguments[0].type === 'Literal' &&
+              typeof _node.arguments[0].value === 'string'
+            ) {
               const module = _node.arguments[0].value;
               if (this.dangerousModules.includes(module)) {
                 violations.push(`Dangerous module import: ${module}`);

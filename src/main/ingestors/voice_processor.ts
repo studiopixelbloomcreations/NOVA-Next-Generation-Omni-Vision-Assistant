@@ -55,11 +55,11 @@ export class VoiceProcessor extends EventEmitter {
     try {
       // Silero expects Float32Array at 16kHz, normalized to [-1, 1]
       const frameSize = 1536;
-      
+
       // Process in frames of frameSize samples
       let totalSpeechProb = 0;
       let frameCount = 0;
-      
+
       for (let offset = 0; offset + frameSize <= pcmData.length; offset += frameSize) {
         const frame = pcmData.slice(offset, offset + 1536);
         const float32Data = new Float32Array(1536);
@@ -79,7 +79,7 @@ export class VoiceProcessor extends EventEmitter {
       if (frameCount > 0) {
         return totalSpeechProb / frameCount;
       }
-      
+
       return 0;
     } catch (err) {
       console.error('[VoiceProcessor] VAD prediction error:', err);

@@ -91,7 +91,7 @@ export class GraphEngine extends EventEmitter {
       node.display_name,
       node.metadata_payload,
       node.created_at,
-      node.updated_at
+      node.updated_at,
     );
   }
 
@@ -107,7 +107,7 @@ export class GraphEngine extends EventEmitter {
       edge.target_node_id,
       edge.edge_relationship,
       edge.edge_weight,
-      edge.last_accessed_at
+      edge.last_accessed_at,
     );
   }
 
@@ -118,14 +118,16 @@ export class GraphEngine extends EventEmitter {
 
   public async getNodesByType(type: string): Promise<IKnowledgeNode[]> {
     const db = this.ensureDb();
-    return db.prepare('SELECT * FROM graph_nodes WHERE node_type = ?').all(type) as IKnowledgeNode[];
+    return db
+      .prepare('SELECT * FROM graph_nodes WHERE node_type = ?')
+      .all(type) as IKnowledgeNode[];
   }
 
   public async getEdgesForNode(nodeId: string): Promise<IKnowledgeEdge[]> {
     const db = this.ensureDb();
-    return db.prepare(
-      'SELECT * FROM graph_edges WHERE source_node_id = ? OR target_node_id = ?'
-    ).all(nodeId, nodeId) as IKnowledgeEdge[];
+    return db
+      .prepare('SELECT * FROM graph_edges WHERE source_node_id = ? OR target_node_id = ?')
+      .all(nodeId, nodeId) as IKnowledgeEdge[];
   }
 
   public async close(): Promise<void> {
@@ -147,7 +149,7 @@ export class GraphEngine extends EventEmitter {
     w1: number = 0.5,
     w2: number = 0.3,
     w3: number = 0.2,
-    lambda: number = 0.0001 // decay coefficient
+    lambda: number = 0.0001, // decay coefficient
   ): number {
     const proximityScore = graphShortestPathDistance > 0 ? 1 / graphShortestPathDistance : 0;
     const decayScore = Math.exp(-lambda * timeDeltaSec);
