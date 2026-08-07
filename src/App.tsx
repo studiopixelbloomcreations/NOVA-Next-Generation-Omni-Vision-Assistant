@@ -12,10 +12,22 @@ import {
 import { ITranscriptEntry } from './renderer/components/RightPanel';
 import { browserBridge } from './renderer/utils/browser_bridge';
 
-// Check if running in Electron environment
-const isElectron =
-  typeof window !== 'undefined' && window.process && (window.process as any).type === 'renderer';
-const ipcRenderer = isElectron ? (window as any).require('electron').ipcRenderer : null;
+const getIpcRenderer = () => {
+  try {
+    // Use the secure preload bridge when available
+    if (typeof window !== 'undefined' && (window as any).__nova_ipc__) {
+      return (window as any).__nova_ipc__;
+    }
+    // Fallback to legacy window.require (older dev setups)
+    if (typeof window !== 'undefined' && (window as any).require) {
+      return (window as any).require('electron').ipcRenderer;
+    }
+  } catch {
+    // Browser runtime or no IPC available.
+  }
+  return null;
+};
+const ipcRenderer = getIpcRenderer();
 
 export const App: React.FC = () => {
   const [showHUD, setShowHUD] = useState(false);
@@ -215,19 +227,21 @@ export const App: React.FC = () => {
       ipcRenderer.on('ai-amplitude', onAiAmplitude);
       ipcRenderer.on('agent-progress-update', onProgressUpdate);
       ipcRenderer.on('agent-tool-created', onToolCreated);
-      ipcRenderer.on('agent-tool-synthesis-phase', (_event: any, payload: any) => {
+      const onToolSynthesisPhase = (_event: any, payload: any) => {
         if (payload) {
           setToolSynthesisPhase(payload.phase);
           setShowToolSynthesis(
             payload.phase !== 'IDLE' && payload.phase !== 'COMPLETED' && payload.phase !== 'FAILED',
           );
         }
-      });
-      ipcRenderer.on('agent-tool-synthesis-steps', (_event: any, payload: any) => {
+      };
+      const onToolSynthesisSteps = (_event: any, payload: any) => {
         if (payload && payload.steps) {
           setToolSynthesisSteps(payload.steps);
         }
-      });
+      };
+      ipcRenderer.on('agent-tool-synthesis-phase', onToolSynthesisPhase);
+      ipcRenderer.on('agent-tool-synthesis-steps', onToolSynthesisSteps);
       ipcRenderer.on('ai-audio-chunk', onAiAudioChunk);
       ipcRenderer.on('ai-text-token', onAiTextToken);
       ipcRenderer.on(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, onUserTextTranscribed);
@@ -247,8 +261,8 @@ export const App: React.FC = () => {
         ipcRenderer.removeListener('ai-amplitude', onAiAmplitude);
         ipcRenderer.removeListener('agent-progress-update', onProgressUpdate);
         ipcRenderer.removeListener('agent-tool-created', onToolCreated);
-        ipcRenderer.removeListener('agent-tool-synthesis-phase', () => {});
-        ipcRenderer.removeListener('agent-tool-synthesis-steps', () => {});
+        ipcRenderer.removeListener('agent-tool-synthesis-phase', onToolSynthesisPhase);
+        ipcRenderer.removeListener('agent-tool-synthesis-steps', onToolSynthesisSteps);
         ipcRenderer.removeListener('ai-audio-chunk', onAiAudioChunk);
         ipcRenderer.removeListener('ai-text-token', onAiTextToken);
         ipcRenderer.removeListener(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, onUserTextTranscribed);
@@ -332,10 +346,47 @@ export const App: React.FC = () => {
         setVoiceState('IDLE');
       };
 
+      const onToolCreatedBrowser = (payload: any) => {
+        if (payload) {
+          setCreatedTools(prev => {
+            const exists = prev.some(t => t.id === payload.id);
+            if (exists) return prev;
+            return [...prev, payload];
+          });
+          setActiveToolId(payload.id);
+        }
+      };
+
+      const onToolSynthesisPhaseBrowser = (payload: any) => {
+        if (payload) {
+          setToolSynthesisPhase(payload.phase);
+          setShowToolSynthesis(
+            payload.phase !== 'IDLE' && payload.phase !== 'COMPLETED' && payload.phase !== 'FAILED',
+          );
+        }
+      };
+
+      const onToolSynthesisStepsBrowser = (payload: any) => {
+        if (payload && payload.steps) {
+          setToolSynthesisSteps(payload.steps);
+        }
+      };
+
+      const onToolCallBrowser = (payload: any) => {
+        // For browser-only runtime we can't execute native agentOrchestrator tools,
+        // but surface the tool-call to the UI so the user can inspect or copy it.
+        setTranscripts(prev => [...prev, { sender: 'NOVA AI', text: `Tool call received: ${JSON.stringify(payload)}` }]);
+      };
+
       browserBridge.on('ai-audio-chunk', onAiAudioChunk);
       browserBridge.on('ai-text-token', onAiTextToken);
       browserBridge.on('user-text-transcribed', onUserTextTranscribed);
       browserBridge.on('connected', onConnected);
+      browserBridge.on('tool-call', onToolCallBrowser);
+      browserBridge.on('agent-tool-created', onToolCreatedBrowser);
+      browserBridge.on('agent-tool-synthesis-phase', onToolSynthesisPhaseBrowser);
+      browserBridge.on('agent-tool-synthesis-steps', onToolSynthesisStepsBrowser);
+      browserBridge.on('nova-sys:gemini-setup-complete', onConnected);
 
       return () => {
         audioRecorder.stopRecording();
@@ -343,6 +394,11 @@ export const App: React.FC = () => {
         browserBridge.off('ai-text-token', onAiTextToken);
         browserBridge.off('user-text-transcribed', onUserTextTranscribed);
         browserBridge.off('connected', onConnected);
+        browserBridge.off('tool-call', onToolCallBrowser);
+        browserBridge.off('agent-tool-created', onToolCreatedBrowser);
+        browserBridge.off('agent-tool-synthesis-phase', onToolSynthesisPhaseBrowser);
+        browserBridge.off('agent-tool-synthesis-steps', onToolSynthesisStepsBrowser);
+        browserBridge.off('nova-sys:gemini-setup-complete', onConnected);
       };
     }
   }, []);

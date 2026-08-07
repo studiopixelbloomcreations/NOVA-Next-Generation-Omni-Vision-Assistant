@@ -1,0 +1,22 @@
+{
+  "tools": [
+    {
+      "id": "bb3cd95b-db58-4a49-8eda-615aa264fc0d",
+      "name": "toolOpenALiveTech",
+      "description": "Fallback synthesized tool for intent: \"open a live tech news stream\"",
+      "sourceCode": "function toolOpenALiveTech(context) {\n      return {\n        success: true,\n        streamType: 'hls',\n        streamUrl: 'https://live-hls-web-aje.getaj.net/AJE/index.m3u8',\n        width: '100%',\n        height: '100%'\n      };\n    }\n    toolOpenALiveTech;",
+      "status": "compiled",
+      "createdAt": 1786081948486,
+      "permissions": []
+    },
+    {
+      "id": "40baef19-4451-41fe-bb2d-596c8675d415",
+      "name": "toolOpenALiveTech",
+      "description": "Fallback synthesized tool for intent: \"open a live tech news stream\"",
+      "sourceCode": "function toolOpenALiveTech(context) {\n      return {\n        success: true,\n        streamType: 'hls',\n        streamUrl: 'https://live-hls-web-aje.getaj.net/AJE/index.m3u8',\n        width: '100%',\n        height: '100%'\n      };\n    }\n    toolOpenALiveTech;",
+      "status": "compiled",
+      "createdAt": 1786081994854,
+      "permissions": []
+    }
+  ]
+}

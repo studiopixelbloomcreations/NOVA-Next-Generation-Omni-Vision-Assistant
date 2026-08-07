@@ -8,8 +8,14 @@
     "dev:dual": "node ./scripts/dev-dual.js",
     "build": "tsc -p tsconfig.main.json && vite build --config vite.config.mts",
     "electron:start": "tsc -p tsconfig.main.json && electron .",
-    "electron:package": "npm run build && electron-builder --publish=never"
+    "electron:package": "npm run build && electron-builder --publish=never",
+    "rebuild-native": "npx electron-rebuild -f -w better-sqlite3,isolated-vm,@picovoice/porcupine-node,@ricky0123/vad-node,onnxruntime-node",
+    "rebuild-native-partial": "npx electron-rebuild -f -w better-sqlite3,@picovoice/porcupine-node,@ricky0123/vad-node,onnxruntime-node",
+    "postinstall": "npm run rebuild-native-partial || true",
+    "e2e:smoke": "node scripts/e2e-smoke.js"
   },
+
+
   "build": {
     "appId": "com.nova.genesis",
     "productName": "Nova Genesis",

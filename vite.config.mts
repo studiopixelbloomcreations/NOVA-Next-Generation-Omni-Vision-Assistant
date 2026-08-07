@@ -67,11 +67,14 @@ function geminiWsProxyPlugin(): Plugin {
           return;
         }
 
-        if (!apiKey.startsWith('AIzaSy')) {
-          console.warn('[gemini-ws-proxy] GEMINI_API_KEY does not look like a standard Google AI Studio key; Gemini Live may reject the connection.');
+        const apiKeyTrimmed = apiKey.trim();
+        if (!/^(AIzaSy|AQ\.|AI|ya29\.)/.test(apiKeyTrimmed)) {
+          console.warn(
+            '[gemini-ws-proxy] GEMINI_API_KEY does not look like a standard Google API key; Gemini Live may reject the connection.',
+          );
         }
 
-        const geminiEndpoint = `${GEMINI_LIVE_ENDPOINT}?key=${apiKey}`;
+        const geminiEndpoint = `${GEMINI_LIVE_ENDPOINT}?key=${encodeURIComponent(apiKey.trim())}`;
         let remote: WsClient | null = null;
         try {
           remote = new WsClient(geminiEndpoint);

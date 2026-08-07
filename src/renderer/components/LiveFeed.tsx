@@ -2,9 +2,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ILiveStreamPayload } from '../../shared/ipc_protocols';
 
-const isElectron =
-  typeof window !== 'undefined' && window.process && (window.process as any).type === 'renderer';
-const ipcRenderer = isElectron ? (window as any).require('electron').ipcRenderer : null;
+const ipcRenderer = (() => {
+  try {
+    if (typeof window !== 'undefined' && (window as any).require) {
+      return (window as any).require('electron').ipcRenderer;
+    }
+  } catch {
+    return null;
+  }
+  return null;
+})();
 
 interface LiveFeedProps {
   createdTools?: any[];

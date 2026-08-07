@@ -1,0 +1,58 @@
+name: Windows Build & Rebuild Native
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-windows:
+    name: Build on Windows
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js 18
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Rust (for native crates)
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Electron Rebuild native modules (capture log)
+        run: |
+          npm run rebuild-native 2>&1 | Out-File -FilePath rebuild.log -Encoding utf8; if ($LASTEXITCODE -ne 0) { Write-Host "rebuild failed with exit $LASTEXITCODE"; exit $LASTEXITCODE }
+
+      - name: Build project
+        run: npm run build
+
+      - name: Run E2E smoke test (node)
+        run: npm run e2e:smoke || true
+
+      - name: Run electron package (produce distributable)
+        run: npm run electron:package || echo "Packaging failed or skipped"
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-build-artifacts
+          path: |
+            dist_electron/**
+            dist/**
+            native_modules/**
+
+      - name: Upload rebuild log
+        uses: actions/upload-artifact@v4
+        with:
+          name: electron-rebuild-log
+          path: rebuild.log

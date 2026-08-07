@@ -3,13 +3,16 @@
 // WebSocket bridge for the pure-browser runtime. Inside Electron the renderer
 // talks to the main process over IPC, so this bridge must never open a socket
 // there — every method becomes an inert no-op.
+import { NovaIpcChannel } from '../../shared/ipc_protocols';
+
 type EventHandler = (payload?: any) => void;
 
 const isElectron: boolean = (() => {
   try {
     if (typeof window === 'undefined') return false;
     const w = window as any;
-    return typeof w.require === 'function' || w.process?.type === 'renderer';
+    // Prefer the preload marker
+    return !!w.__nova_ipc__ || typeof w.require === 'function' || w.process?.type === 'renderer';
   } catch {
     return false;
   }
@@ -124,7 +127,20 @@ class BrowserBridge {
       this.emitInternal(msg.event);
       return;
     }
+
     const sc = msg.serverContent;
+    // If the server indicates session setup is complete, forward a named event
+    // that matches the main-process IPC channel so UI code can be shared.
+    if ((msg.setupComplete || sc?.setupComplete) === true) {
+      this.emitInternal(NovaIpcChannel.GEMINI_SETUP_COMPLETE);
+    }
+
+    // Tool-calls from the model may appear either at top-level or inside serverContent
+    const toolCall = msg.toolCall ?? sc?.toolCall;
+    if (toolCall) {
+      this.emitInternal('tool-call', toolCall);
+    }
+
     if (!sc) return;
 
     if (sc.outputTranscription?.text) {

@@ -1,12 +1,17 @@
 // src/renderer/utils/audio_recorder.ts
-let ipcRenderer: any = null;
-try {
-  if (typeof window !== 'undefined' && (window as any).require) {
-    ipcRenderer = (window as any).require('electron').ipcRenderer;
+const ipcRenderer = (() => {
+  try {
+    if (typeof window !== 'undefined' && (window as any).__nova_ipc__) {
+      return (window as any).__nova_ipc__;
+    }
+    if (typeof window !== 'undefined' && (window as any).require) {
+      return (window as any).require('electron').ipcRenderer;
+    }
+  } catch {
+    return null;
   }
-} catch {
-  ipcRenderer = null;
-}
+  return null;
+})();
 
 import { browserBridge } from './browser_bridge';
 

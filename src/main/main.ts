@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { app, BrowserWindow, ipcMain, screen, desktopCapturer } from 'electron';
 import { join } from 'path';
 import { randomUUID } from 'crypto';
@@ -100,9 +101,12 @@ function createWindow() {
     backgroundColor: '#020205',
     hasShadow: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      // Run renderer in a secure, context-isolated environment and provide a
+      // small preload bridge to enable IPC without exposing nodeIntegration.
+      nodeIntegration: false,
+      contextIsolation: true,
       webviewTag: true,
+      preload: join(__dirname, 'preload.js'),
     },
   });
 
@@ -220,17 +224,6 @@ app.whenReady().then(async () => {
     }
     // Notify renderer
     sendToRenderer('wake-word-detected', { keyword: event.keyword, timestamp: event.timestamp });
-  });
-
-  // Phase 2: Electron Hardware Lifecycle Bypass - Media Permission Handler
-  app.on('web-contents-created', (_event, contents) => {
-    contents.session.setPermissionRequestHandler((_wc, permission, callback) => {
-      if (permission === 'media' || permission === 'mediaKeySystem') {
-        callback(true);
-      } else {
-        callback(false);
-      }
-    });
   });
 
   createWindow();
@@ -359,8 +352,9 @@ app.whenReady().then(async () => {
       geminiLiveBridge.sendTextMessage(commandText);
 
       // Dynamic tool synthesis is currently a live-stream widget compiler;
-      // only engage it when the intent actually asks for one.
-      if (/\b(stream|video|news|watch|feed|live|tv|broadcast)\b/i.test(commandText)) {
+      // engage it for a broader set of automation requests so NOVA can create
+      // tools or widgets when the user asks for an action-oriented result.
+      if (/\b(stream|video|news|watch|feed|live|tv|broadcast|tool|automation|create|generate|open|launch|run|search|analyze|summarize|report|scan)\b/i.test(commandText)) {
         const toolDef = await agentOrchestrator.generateToolFromIntent(commandText);
         return {
           success: true,

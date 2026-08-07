@@ -56,15 +56,17 @@ export class GeminiLiveBridge extends EventEmitter {
       return;
     }
 
-    // Validate API key format
-    if (!this.apiKey.startsWith('AIzaSy')) {
+    const apiKey = this.apiKey.trim();
+    this.apiKey = apiKey;
+    const looksLikeValidKey = /^(AIzaSy|AQ\.|AI|ya29\.)/.test(apiKey);
+    if (!looksLikeValidKey) {
       console.warn(
-        '[geminiLiveBridge] GEMINI_API_KEY does not look like a valid Google AI Studio key (should start with AIzaSy)',
+        '[geminiLiveBridge] GEMINI_API_KEY does not look like a standard Google API key; attempting connection anyway.',
       );
     }
 
     // Correct endpoint: BidiGenerateContent with API key as query param
-    const endpoint = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.apiKey}`;
+    const endpoint = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${encodeURIComponent(this.apiKey)}`;
 
     console.log('[geminiLiveBridge] Connecting to Gemini Live API...');
     this.setConnectionState('CONNECTING');
@@ -133,8 +135,9 @@ export class GeminiLiveBridge extends EventEmitter {
 
       const serverContent = payload?.serverContent;
 
-      if (payload?.toolCall) {
-        this.emit('tool-call', payload.toolCall);
+      const toolCallPayload = payload?.toolCall ?? payload?.serverContent?.toolCall;
+      if (toolCallPayload) {
+        this.emit('tool-call', toolCallPayload);
       }
 
       if (serverContent?.interrupted) {
@@ -182,7 +185,7 @@ export class GeminiLiveBridge extends EventEmitter {
         this.emitInteractionComplete();
       }
 
-      if (payload?.setupComplete) {
+      if (payload?.setupComplete || payload?.serverContent?.setupComplete) {
         console.log('[geminiLiveBridge] Setup complete - session ready');
         this.sessionReady = true;
         this.reconnectDelayMs = RECONNECT_BASE_DELAY_MS;
@@ -311,6 +314,10 @@ export class GeminiLiveBridge extends EventEmitter {
     return this.connected;
   }
 
+  public isSessionReady(): boolean {
+    return this.sessionReady;
+  }
+
   public getConnectionState(): ConnectionState {
     return this.connectionState;
   }
@@ -345,6 +352,13 @@ export class GeminiLiveBridge extends EventEmitter {
 
   private safeSend(serialized: string, context: string): void {
     if (!this.ws) return;
+    // Only send when socket is open
+    if ((this.ws as any).readyState !== (WebSocket as any).OPEN) {
+      console.error(`[geminiLiveBridge] attempted to send ${context} while socket not OPEN; scheduling reconnect`);
+      if (!this.intentionalClose) this.scheduleReconnect();
+      return;
+    }
+
     try {
       this.ws.send(serialized);
     } catch (err) {
