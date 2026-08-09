@@ -248,11 +248,43 @@ export class AutonomousExecutionEngine extends EventEmitter {
       verification: String(s?.verification ?? 'the operation completes successfully'),
     }));
     if (!steps.length) throw new Error('planner returned an empty executable plan');
+    // Groq may occasionally expose the implementation recipe instead of the
+    // user objective ("import modules", "define a function", etc.). Those are
+    // not executable NOVA capabilities. Collapse that malformed decomposition
+    // into one Forge request so the coding agent receives the real objective.
+    const implementationFragments = steps.filter(step =>
+      /\b(import (?:necessary )?(?:python )?modules?|define (?:a )?(?:python )?function|create (?:a )?python script|write (?:a )?script|install (?:a )?module)\b/i.test(`${step.goal} ${step.capability}`),
+    );
+    if (implementationFragments.length >= 2) {
+      return {
+        objective: String(parsed.objective ?? request),
+        steps: [{
+          id: '1',
+          goal: request,
+          capability: request,
+          tool: null,
+          args: { query: request },
+          verification: 'the requested report is returned with real non-negative counts',
+        }],
+      };
+    }
     return { objective: String(parsed.objective ?? request), steps };
   }
 
   private async ensureTool(step: AgentPlanStep): Promise<{ tool: ToolDefinition; execution?: ToolExecutionResult }> {
-    const existing = step.tool ? (this.registry.get(step.tool) ?? this.registry.getByName(step.tool)) : this.registry.findCapability(step.capability);
+    let existing: ToolDefinition | null = step.tool ? (this.registry.get(step.tool) ?? this.registry.getByName(step.tool)) : null;
+    if (!existing) {
+      const candidate = this.registry.findCapability(step.capability);
+      const terms = step.capability.toLowerCase().split(/[^a-z0-9]+/).filter(term => term.length > 2);
+      const generic = new Set(['the', 'and', 'for', 'with', 'from', 'tool', 'operation', 'request', 'real', 'current', 'report', 'listing']);
+      const usefulTerms = terms.filter(term => !generic.has(term));
+      const haystack = candidate ? `${candidate.name} ${candidate.description} ${candidate.category}`.toLowerCase() : '';
+      const hits = usefulTerms.filter(term => haystack.includes(term)).length;
+      // A single generic word such as "listing" must not hijack a missing
+      // capability with an unrelated persisted tool.
+      if (candidate && usefulTerms.length > 0 && hits >= Math.min(2, usefulTerms.length)) existing = candidate;
+      if (candidate && usefulTerms.length === 0 && terms.length > 0 && haystack.includes(step.capability.toLowerCase().trim())) existing = candidate;
+    }
     if (existing) return { tool: existing };
     this.emitProgress(`Creating capability: ${step.capability}`, 'active');
     const forgeResult: ForgeResult = await this.forge.forgeTool(step.capability);
