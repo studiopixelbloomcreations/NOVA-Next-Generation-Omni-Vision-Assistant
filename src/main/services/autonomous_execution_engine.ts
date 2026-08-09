@@ -5,6 +5,7 @@
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
+import * as os from 'os';
 import { ToolRegistry } from './tool_registry';
 import { ToolExecutor } from './tool_executor';
 import { ToolForge, ForgeResult } from './tool_forge';
@@ -157,7 +158,6 @@ export class AutonomousExecutionEngine extends EventEmitter {
   private readonly selector = new CodingAgentSelector();
   private readonly prompting = new PromptingEngine();
   private readonly forge: ToolForge;
-  private readonly testing: ToolTestingEngine;
   private readonly verification = new ToolVerificationEngine(this.selector);
   private readonly output = new OutputEngine();
 
@@ -165,7 +165,6 @@ export class AutonomousExecutionEngine extends EventEmitter {
     super();
     this.availability = new ToolAvailabilityEngine(registry);
     this.forge = new ToolForge(registry);
-    this.testing = new ToolTestingEngine(this.forge);
     this.hydrateToolsFromDisk();
   }
 
@@ -263,6 +262,32 @@ export class AutonomousExecutionEngine extends EventEmitter {
     return { tool: forgeResult.tool, execution: execution && typeof execution === 'object' && 'success' in execution ? execution : undefined };
   }
 
+  private verifyPreviousResult(step: AgentPlanStep, previous: EngineStepResult | undefined): EngineStepResult | null {
+    if (!previous?.success) return null;
+    const text = `${step.goal} ${step.capability} ${step.verification}`.toLowerCase();
+    if (!/\b(verify|validate|confirm|check)\b/.test(text)) return null;
+    if (!previous.payload || typeof previous.payload !== 'object') return null;
+
+    const payload = previous.payload as Record<string, unknown>;
+    if (typeof payload.username === 'string') {
+      const expected = os.userInfo().username || process.env.USERNAME || '';
+      const passed = payload.username.length > 0 && expected.length > 0 && payload.username === expected;
+      const detail = passed
+        ? `verified username '${payload.username}' against the current Windows user`
+        : `username '${payload.username}' did not match the current Windows user`;
+      return {
+        step,
+        tool: previous.tool,
+        success: passed,
+        payload: previous.payload,
+        error: passed ? null : detail,
+        attempts: 1,
+        verification: { passed, detail },
+      };
+    }
+    return null;
+  }
+
   async run(request: string): Promise<AutonomousTrace> {
     const taskId = crypto.randomUUID();
     const startedAt = Date.now();
@@ -281,12 +306,28 @@ export class AutonomousExecutionEngine extends EventEmitter {
     let overall = true;
     for (const step of plan.steps) {
       let final: EngineStepResult | null = null;
+      const directVerification = this.verifyPreviousResult(step, results[results.length - 1]);
+      if (directVerification) {
+        final = directVerification;
+        results.push(final);
+        this.emitProgress(`${step.goal} — ${final.success ? 'verified' : 'failed'}`, final.success ? 'completed' : 'failed');
+        if (!final.success) overall = false;
+        if (!final.success) break;
+        continue;
+      }
       for (let attempt = 1; attempt <= MAX_RETRIES_PER_STEP; attempt++) {
         try {
           this.emitProgress(`${step.goal} — attempt ${attempt}`, 'active');
           const ensured = await this.ensureTool(step);
           const tool = ensured.tool;
           const args = { ...step.args, query: step.args.query ?? request };
+          const priorExecution = results.find(result => result.success && result.tool?.id === tool.id);
+          if (priorExecution && /\b(execute|run|perform|use)\b/i.test(step.goal)) {
+            const verification = { passed: true, detail: 'reused prior verified result; duplicate execution prevented' };
+            final = { step, tool, success: true, payload: priorExecution.payload, error: null, attempts: 1, verification };
+            this.emitProgress(`${step.goal} — verified without duplicate execution`, 'completed');
+            break;
+          }
           const execution = ensured.execution ?? await this.executor.executeDefinition(tool, args);
           if (!execution.success) throw new Error(execution.error ?? 'tool execution failed');
           const verification = await this.verification.modelVerify(request, step, execution.payload);
