@@ -1,5 +1,5 @@
 // src/main/services/task_router.ts
-// Provider-agnostic intent routing. Gemini owns conversation/media; Grok owns
+// Provider-agnostic intent routing. Gemini owns conversation/media; Groq owns
 // reasoning, planning, engineering and tool synthesis. NOVA Core executes.
 export type TaskKind = 'conversation' | 'reasoning' | 'engineering' | 'planning' | 'tool_synthesis' | 'media' | 'memory';
 
@@ -29,7 +29,7 @@ export interface RouteDecision { kind: TaskKind; providerId: string; }
 
 export function preferredProviderFor(kind: TaskKind): string {
   switch (kind) {
-    case 'reasoning': case 'engineering': case 'planning': case 'tool_synthesis': return 'grok';
+    case 'reasoning': case 'engineering': case 'planning': case 'tool_synthesis': return 'groq';
     default: return 'gemini';
   }
 }
