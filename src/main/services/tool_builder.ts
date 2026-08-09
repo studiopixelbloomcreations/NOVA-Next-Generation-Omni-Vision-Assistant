@@ -7,12 +7,10 @@ import * as crypto from 'crypto';
 import { ToolRegistry } from './tool_registry';
 import { ToolExecutor } from './tool_executor';
 import { ToolForge } from './tool_forge';
-import { NovaConfig } from '../core/config';
-import { ToolDefinition, ToolSynthesisPhase, BuildOptions } from './tool_types';
 import { logger } from '../core/logger';
+import { ToolDefinition, ToolSynthesisPhase, BuildOptions } from './tool_types';
 
 const MAX_CAPABILITY_RECOVERY = 3;
-const APPROVAL_TIMEOUT_MS = 60_000;
 
 type ProgressStatus = 'pending' | 'active' | 'completed' | 'failed';
 interface ProgressStep { stepId: string; label: string; status: ProgressStatus; timestamp: number; }
@@ -105,8 +103,6 @@ export class ToolBuilder extends EventEmitter {
       return { tool: existing, result: result.payload, reused: true, executionOk: true };
     }
 
-    // 2–7. Forge is the single creation path: design, code, static audit,
-    // dependency review, sandbox tests, registration and production execution.
     this.setPhase('TOOL_NOT_FOUND');
     this.step('No suitable capability exists — starting NOVA Forge.', 'completed');
 
@@ -127,7 +123,10 @@ export class ToolBuilder extends EventEmitter {
         this.setPhase('DEPLOYING_TOOL');
         this.step(`Registered Python capability: ${forgeResult.tool.name}`, 'completed');
         this.setPhase('COMPLETED');
-        this.step(forgeResult.productionOk ? 'Capability executed successfully on the real machine.' : 'Capability was created but production verification failed.', forgeResult.productionOk ? 'completed' : 'failed');
+        this.step(
+          forgeResult.productionOk ? 'Capability executed successfully on the real machine.' : 'Capability was created but production verification failed.',
+          forgeResult.productionOk ? 'completed' : 'failed',
+        );
 
         this.emit('tool-created', { tool: forgeResult.tool, execution: forgeResult.execution });
         broadcast('agent-tool-created', {
@@ -170,7 +169,8 @@ export class ToolBuilder extends EventEmitter {
     throw new Error(`Capability creation failed: ${lastError || 'unknown failure'}`);
   }
 
-  /** Optional approval hook retained for compatibility; NOVA defaults to autonomous execution. */
+  // Compatibility hooks for existing IPC. Autonomous mode does not create an
+  // approval prompt; these only settle a legacy pending request if one exists.
   public approvePendingTool(): boolean {
     if (!this.pendingApproval) return false;
     this.pendingApproval.resolve(true);
@@ -189,7 +189,5 @@ export class ToolBuilder extends EventEmitter {
 
   public hasPendingApproval(): boolean { return this.pendingApproval !== null; }
 
-  public static inferPermissionsFor(_code: string) {
-    return [];
-  }
+  public static inferPermissionsFor(_code: string) { return []; }
 }
