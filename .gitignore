@@ -4,6 +4,7 @@ dist_electron/
 dist_electron_*/
 dist_installer_*/
 release/
+build/ico-sizes/
 out/
 *.log
 *.exe
