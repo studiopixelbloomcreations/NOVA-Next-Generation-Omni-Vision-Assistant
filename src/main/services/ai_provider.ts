@@ -1,6 +1,6 @@
 // src/main/services/ai_provider.ts
 // Provider-agnostic AI orchestration layer.
-// Gemini Live is NOVA's conversational/voice head. Grok is the reasoning,
+// Gemini Live is NOVA's conversational/voice head. Groq is the reasoning,
 // planning, engineering, and tool-synthesis engine. NOVA Core remains the
 // execution authority; providers never directly own physical execution.
 import { geminiLiveBridge } from './gemini_live_bridge';
@@ -75,29 +75,29 @@ export class GeminiLiveProvider implements AiProvider {
     }
     return geminiRestGenerate(this.apiKey, prompt, opts);
   }
-  describe(): Record<string, unknown> { return { id: this.id, configured: this.isConfigured(), liveConnected: this.isAvailable() }; }
+  describe(): Record<string, unknown> { return { id: this.id, configured: this.isConfigured(), liveConnected: this.isAvailable(), voice: NovaConfig.ai.liveVoice }; }
 }
 
-/** xAI Grok reasoning/engineering provider. Gemini Live remains the voice/conversation head. */
-export class GrokProvider implements AiProvider {
-  readonly id = 'grok';
-  readonly label = 'Grok';
+/** Groq reasoning/engineering provider. Gemini Live remains the voice/conversation head. */
+export class GroqProvider implements AiProvider {
+  readonly id = 'groq';
+  readonly label = 'Groq';
   private apiKey: string;
   constructor(apiKey: string) { this.apiKey = apiKey; }
   setApiKey(key: string): void { this.apiKey = key; }
   isConfigured(): boolean { return typeof this.apiKey === 'string' && this.apiKey.trim().length > 0; }
   isAvailable(): boolean { return this.isConfigured(); }
-  sendMessage(_text: string): void { /* NOVA Core owns turns; Grok is request/response reasoning only. */ }
+  sendMessage(_text: string): void { /* NOVA Core owns turns; Groq is request/response reasoning only. */ }
   async generate(prompt: string, opts: GenerateOptions = {}): Promise<string> {
-    if (!this.isConfigured()) throw new Error('XAI_API_KEY is not configured.');
+    if (!this.isConfigured()) throw new Error('GROQ_API_KEY is not configured.');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? REST_TIMEOUT_DEFAULT_MS);
     try {
-      const response = await fetch('https://api.x.ai/v1/chat/completions', {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${this.apiKey.trim()}` },
         body: JSON.stringify({
-          model: process.env.NOVA_GROK_MODEL || 'grok-4.20',
+          model: NovaConfig.ai.groqModel,
           messages: [
             { role: 'system', content: 'You are the reasoning and engineering engine inside NOVA Genesis. Analyze goals, inspect capabilities supplied by NOVA Core, plan reliable solutions, design or repair tools when needed, and return precise actionable plans. NOVA Core is the sole authority that executes physical actions on the user computer.' },
             { role: 'user', content: prompt },
@@ -108,14 +108,14 @@ export class GrokProvider implements AiProvider {
         }),
         signal: controller.signal,
       });
-      if (!response.ok) { const body = await response.text().catch(() => ''); throw new Error(`Grok API error ${response.status}: ${body.slice(0, 300)}`); }
+      if (!response.ok) { const body = await response.text().catch(() => ''); throw new Error(`Groq API error ${response.status}: ${body.slice(0, 300)}`); }
       const json = (await response.json()) as { choices?: Array<{ message?: { content?: string } }> };
       const text = json.choices?.[0]?.message?.content ?? '';
-      if (!text.trim()) throw new Error('Grok returned an empty completion.');
+      if (!text.trim()) throw new Error('Groq returned an empty completion.');
       return text.trim();
     } finally { clearTimeout(timer); }
   }
-  describe(): Record<string, unknown> { return { id: this.id, configured: this.isConfigured(), model: process.env.NOVA_GROK_MODEL || 'grok-4.20' }; }
+  describe(): Record<string, unknown> { return { id: this.id, configured: this.isConfigured(), model: NovaConfig.ai.groqModel }; }
 }
 
 export class AiProviderRegistry {
@@ -140,14 +140,14 @@ export class AiProviderRegistry {
   }
 }
 
-function buildProviders(): { registry: AiProviderRegistry; gemini: GeminiLiveProvider; grok: GrokProvider } {
-  const gemini = new GeminiLiveProvider(process.env.GEMINI_API_KEY ?? '');
-  const grok = new GrokProvider(process.env.XAI_API_KEY ?? process.env.GROK_API_KEY ?? '');
+function buildProviders(): { registry: AiProviderRegistry; gemini: GeminiLiveProvider; groq: GroqProvider } {
+  const gemini = new GeminiLiveProvider('');
+  const groq = new GroqProvider('');
   const registry = new AiProviderRegistry(NovaConfig.ai.providerPriority);
   registry.register(gemini);
-  registry.register(grok);
-  return { registry, gemini, grok };
+  registry.register(groq);
+  return { registry, gemini, groq };
 }
 
-const { registry: aiProviderRegistry, gemini: geminiProvider, grok: grokProvider } = buildProviders();
-export { aiProviderRegistry, geminiProvider, grokProvider };
+const { registry: aiProviderRegistry, gemini: geminiProvider, groq: groqProvider } = buildProviders();
+export { aiProviderRegistry, geminiProvider, groqProvider };
