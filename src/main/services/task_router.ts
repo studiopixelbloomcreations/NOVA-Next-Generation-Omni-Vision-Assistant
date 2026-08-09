@@ -39,8 +39,19 @@ import { aiProviderRegistry } from './ai_provider';
 
 export class TaskRouter {
   public route(intent: string): RouteDecision { const kind = classifyTask(intent); return { kind, providerId: preferredProviderFor(kind) }; }
+
   public providerFor(kind: TaskKind): AiProvider | null {
-    const preferred = aiProviderRegistry.get(preferredProviderFor(kind));
+    const preferredId = preferredProviderFor(kind);
+    const preferred = aiProviderRegistry.get(preferredId);
+
+    // Reasoning/engineering/tool-synthesis tasks must not silently fall back to
+    // the conversational head. If Groq is unavailable, NOVA Core receives a
+    // real provider-unavailable state and can recover/retry rather than using
+    // the wrong model for the job.
+    if (preferredId === 'groq') {
+      return preferred && preferred.isConfigured() ? preferred : null;
+    }
+
     if (preferred && preferred.isConfigured()) return preferred;
     return aiProviderRegistry.primary();
   }
