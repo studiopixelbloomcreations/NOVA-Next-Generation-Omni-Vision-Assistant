@@ -233,10 +233,10 @@ export class ToolBuilder extends EventEmitter {
             provider: provider.id,
             error: err instanceof Error ? err.message : String(err),
           });
-          generated = streamWidgetGenerator(buildOptions) ?? this.emptyGenerated();
+          generated = streamWidgetGenerator(buildOptions) ?? this.failStreamSynthesis(buildOptions.intent);
         }
       } else {
-        generated = streamWidgetGenerator(buildOptions) ?? this.emptyGenerated();
+        generated = streamWidgetGenerator(buildOptions) ?? this.failStreamSynthesis(buildOptions.intent);
       }
     } else {
       // Real Tool Forge path — registers + executes on the real machine.
@@ -506,14 +506,9 @@ Output ONLY the raw function code.`;
     );
   }
 
-  /** Used when a stream widget fallback fails unexpectedly (should not happen). */
-  private emptyGenerated(): { code: string; name: string; description: string; category: string } {
-    return {
-      code: 'function NovaPlaceholder(c){ return { success: true, error: "stream unavailable" }; } NovaPlaceholder;',
-      name: 'LiveStreamWidget',
-      description: 'Live stream widget',
-      category: 'media',
-    };
+  /** Never fabricate a successful stream capability when generation fails. */
+  private failStreamSynthesis(intent: string): never {
+    throw new Error(`Unable to create a real media capability for: ${intent}`);
   }
 
   public static inferPermissionsFor(code: string) {

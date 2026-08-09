@@ -186,10 +186,47 @@ function extractDesign(text: string): Partial<ForgeDesign> | null {
   const first = cleaned.indexOf('{');
   const last = cleaned.lastIndexOf('}');
   if (first < 0 || last <= first) return null;
+  const candidate = cleaned.slice(first, last + 1);
   try {
-    return JSON.parse(cleaned.slice(first, last + 1)) as Partial<ForgeDesign>;
+    return JSON.parse(candidate) as Partial<ForgeDesign>;
   } catch {
-    return null;
+    // Models occasionally emit literal line breaks inside the JSON string
+    // values that carry generated Python. Repair only those illegal control
+    // characters; leave the actual JSON structure and escaped sequences alone.
+    let repaired = '';
+    let inString = false;
+    let escaped = false;
+    for (const char of candidate) {
+      if (escaped) {
+        repaired += char;
+        escaped = false;
+        continue;
+      }
+      if (char === '\\') {
+        repaired += char;
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        repaired += char;
+        inString = !inString;
+        continue;
+      }
+      if (inString && char === '\n') {
+        repaired += '\\n';
+      } else if (inString && char === '\r') {
+        repaired += '\\r';
+      } else if (inString && char === '\t') {
+        repaired += '\\t';
+      } else {
+        repaired += char;
+      }
+    }
+    try {
+      return JSON.parse(repaired) as Partial<ForgeDesign>;
+    } catch {
+      return null;
+    }
   }
 }
 
