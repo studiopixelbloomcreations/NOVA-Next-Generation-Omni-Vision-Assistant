@@ -2,9 +2,9 @@
 """NOVA Python backend bootstrap.
 
 Creates (or repairs) the `.nova-venv` virtual environment next to this file,
-installs the declared requirements, and prints a JSON status line. The core
-runtime is stdlib-only, so the venv is only required for the optional extras
-(pillow, pytesseract, pyautogui).
+installs the declared runtime requirements, and prints a JSON status line.
+Missing required runtime dependencies are reported as failures instead of
+being silently treated as a healthy installation.
 
 Usage:
     python bootstrap.py            # create venv + install requirements
@@ -12,7 +12,6 @@ Usage:
 """
 import argparse
 import json
-import os
 import subprocess
 import sys
 import venv
@@ -33,7 +32,7 @@ def module_availability(python: Path) -> dict:
     probe = (
         "import importlib.util, json\n"
         "mods = {}\n"
-        "for m in ['PIL', 'pytesseract', 'pyautogui']:\n"
+        "for m in ['PIL', 'pytesseract', 'pyautogui', 'faster_whisper', 'numpy']:\n"
         "    mods[m] = importlib.util.find_spec(m) is not None\n"
         "print(json.dumps(mods))\n"
     )
@@ -45,18 +44,20 @@ def module_availability(python: Path) -> dict:
             return json.loads(result.stdout.strip())
     except Exception:
         pass
-    return {"PIL": False, "pytesseract": False, "pyautogui": False}
+    return {"PIL": False, "pytesseract": False, "pyautogui": False, "faster_whisper": False, "numpy": False}
 
 
 def status() -> dict:
     exists = venv_python().exists()
     modules = module_availability(venv_python()) if exists else {}
+    whisper_ready = bool(exists and modules.get("faster_whisper") and modules.get("numpy"))
     return {
         "venvExists": exists,
         "venvPath": str(VENV_DIR),
         "python": str(venv_python()) if exists else None,
         "modules": modules,
-        "coreOnly": True,
+        "whisperReady": whisper_ready,
+        "coreOnly": not whisper_ready,
     }
 
 
@@ -66,16 +67,20 @@ def bootstrap(install: bool = True) -> dict:
         venv.EnvBuilder(with_pip=True).create(VENV_DIR)
     python = venv_python()
     if install and REQUIREMENTS.exists():
-        print("[nova-bootstrap] installing optional requirements (best-effort)")
+        print("[nova-bootstrap] installing declared Python requirements")
         try:
             subprocess.run(
                 [str(python), "-m", "pip", "install", "--disable-pip-version-check", "-r", str(REQUIREMENTS)],
-                check=False,
+                check=True,
                 timeout=600,
             )
         except Exception as exc:  # noqa: BLE001
-            print(f"[nova-bootstrap] pip install failed (non-fatal): {exc}")
-    return status()
+            print(f"[nova-bootstrap] pip install failed: {exc}", file=sys.stderr)
+            raise
+    result = status()
+    if install and not result["whisperReady"]:
+        raise RuntimeError("NOVA Python bootstrap completed without a usable faster-whisper runtime")
+    return result
 
 
 def main() -> int:
@@ -84,11 +89,15 @@ def main() -> int:
     parser.add_argument("--no-install", action="store_true", help="create venv without pip install")
     args = parser.parse_args()
 
-    if args.status:
-        print(json.dumps(status()))
+    try:
+        if args.status:
+            print(json.dumps(status()))
+            return 0
+        print(json.dumps(bootstrap(install=not args.no_install)))
         return 0
-    print(json.dumps(bootstrap(install=not args.no_install)))
-    return 0
+    except Exception as exc:  # noqa: BLE001
+        print(json.dumps({"ok": False, "error": str(exc)}))
+        return 1
 
 
 if __name__ == "__main__":
