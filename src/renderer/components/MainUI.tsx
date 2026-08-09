@@ -1,14 +1,20 @@
 import React from 'react';
 import { CircularOrb } from './CircularOrb';
-import { NovaVoiceState } from '../../shared/ipc_protocols';
+import { NovaVoiceState, IRuntimeStatePayload } from '../../shared/ipc_protocols';
 
 interface MainUIProps {
   voiceState: NovaVoiceState;
   amplitude: number;
+  runtimeState: IRuntimeStatePayload | null;
   onActivateHUD: () => void;
 }
 
-export const MainUI: React.FC<MainUIProps> = ({ voiceState, amplitude, onActivateHUD }) => {
+export const MainUI: React.FC<MainUIProps> = ({
+  voiceState,
+  amplitude,
+  runtimeState,
+  onActivateHUD,
+}) => {
   return (
     <div
       onClick={onActivateHUD}
@@ -29,11 +35,28 @@ export const MainUI: React.FC<MainUIProps> = ({ voiceState, amplitude, onActivat
         </div>
       </div>
 
-      {/* Ambience bottom label */}
+      {/* Ambience bottom label — real overall state, never fabricated */}
       <div className="absolute bottom-10 left-1/2 transform -translate-x-1/2 text-center select-none pointer-events-none">
-        <p className="font-rajdhani text-sm font-semibold tracking-[0.25em] text-blue-400/50 uppercase">
-          Tap anywhere or speak to open HUD
+        <p
+          className={`font-rajdhani text-sm font-semibold tracking-[0.25em] uppercase ${
+            runtimeState?.overall === 'ONLINE'
+              ? 'text-emerald-400/70'
+              : runtimeState?.overall === 'ERROR'
+                ? 'text-rose-400/70'
+                : 'text-blue-400/50'
+          }`}
+        >
+          {runtimeState?.overall === 'ONLINE'
+            ? '● ' + runtimeState.overall + ' — Tap anywhere or speak to open HUD'
+            : runtimeState?.overall === 'ERROR'
+              ? '● ' + runtimeState.overall + ' — Tap to inspect'
+              : '● ' + (runtimeState?.overall ?? 'BOOTING') + ' — Tap anywhere or speak to open HUD'}
         </p>
+        {runtimeState?.currentTask && runtimeState.overall !== 'ONLINE' && (
+          <p className="font-rajdhani text-[10px] font-semibold tracking-[0.2em] text-[#ffffff35] uppercase mt-1">
+            {runtimeState.currentTask}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -1,7 +1,13 @@
 // src/renderer/components/CenterHUD.tsx
 import React, { useState, useEffect, useCallback } from 'react';
-import { Camera, Folder, Search, Cpu, X, Radio, Zap } from 'lucide-react';
-import { ISystemTelemetryPayload, IContextChipPayload } from '../../shared/ipc_protocols';
+import { Camera, Folder, Search, Cpu, X, Radio, Zap, Mic, MicOff, AlertTriangle, Activity } from 'lucide-react';
+import {
+  ISystemTelemetryPayload,
+  IContextChipPayload,
+  IRuntimeStatePayload,
+  IMicStatePayload,
+  OverallStatus,
+} from '../../shared/ipc_protocols';
 
 function extractUrlHost(url: string): string {
   try {
@@ -18,16 +24,31 @@ interface ActionCard {
   contextual?: boolean;
 }
 
+export interface IToolApprovalRequest {
+  toolId: string | null;
+  name: string;
+  description: string;
+  intent: string;
+  requestedAt: number;
+}
+
 interface CenterHUDProps {
   onSearchSubmit: (text: string) => void;
   createdTools?: any[];
   activeToolId?: string | null;
   setActiveToolId?: (id: string | null) => void;
   telemetry: ISystemTelemetryPayload | null;
+  runtimeState: IRuntimeStatePayload | null;
   contextChips: IContextChipPayload['chips'];
+  micState: IMicStatePayload | null;
+  onMicToggle: () => void;
+  onMicDiagnostic: () => Promise<any>;
   toolSynthesisPhase?: string;
   toolSynthesisSteps?: any[];
   showToolSynthesis?: boolean;
+  approvalRequest?: IToolApprovalRequest | null;
+  onApprove?: () => void;
+  onReject?: () => void;
 }
 
 export const CenterHUD: React.FC<CenterHUDProps> = ({
@@ -36,11 +57,58 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
   activeToolId = null,
   setActiveToolId = () => {},
   telemetry,
+  runtimeState,
   contextChips,
+  micState,
+  onMicToggle,
+  onMicDiagnostic,
   toolSynthesisPhase = 'IDLE',
   toolSynthesisSteps = [],
   showToolSynthesis = true,
+  approvalRequest = null,
+  onApprove = () => {},
+  onReject = () => {},
 }) => {
+  const [diagnosticBusy, setDiagnosticBusy] = useState(false);
+  const [diagnosticResult, setDiagnosticResult] = useState<string | null>(null);
+
+  // REAL microphone state — every value comes from MicManager via IPC.
+  const micListening = micState?.listening === true;
+  const micAvailable = micState?.available === true;
+  const micStateLabel =
+    micState?.state === 'LISTENING'
+      ? 'LISTENING'
+      : micState?.state === 'PERMISSION_REQUIRED'
+        ? 'PERMISSION'
+        : micState?.state === 'ERROR'
+          ? 'ERROR'
+          : micState?.state === 'UNAVAILABLE'
+            ? 'NO MIC'
+            : micState?.state === 'INITIALIZING'
+              ? 'INIT'
+              : micState?.state === 'READY'
+                ? 'READY'
+                : micState?.state ?? '—';
+  const micDevice = micState?.defaultCapture ?? null;
+
+  const runDiagnostic = async () => {
+    setDiagnosticBusy(true);
+    setDiagnosticResult(null);
+    try {
+      const res = await onMicDiagnostic();
+      if (res && res.ok) {
+        setDiagnosticResult(
+          `Signal OK — RMS ${res.rms?.toFixed(3)} peak ${res.peak?.toFixed(3)} @ ${res.sampleRate ?? '?'}Hz (${res.frames ?? 0} frames)`,
+        );
+      } else {
+        setDiagnosticResult(`Mic diagnostic failed: ${res?.error ?? 'unknown error'}`);
+      }
+    } catch {
+      setDiagnosticResult('Mic diagnostic failed');
+    } finally {
+      setDiagnosticBusy(false);
+    }
+  };
   const [inputText, setInputText] = useState('');
   const [now, setNow] = useState(() => new Date());
   const [sessionStartTime] = useState(Date.now());
@@ -116,21 +184,41 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
 
   const activeTool = createdTools.find(t => t.id === activeToolId);
 
+  // REAL state labels — the top-right strip reports what the runtime actually
+  // says. Nothing here is hardcoded; every value comes from the runtime state
+  // hub or live telemetry.
   const captureLabel = telemetry
     ? `${telemetry.captureWidth}×${telemetry.captureHeight} @ ${telemetry.frameRate}fps`
     : 'NO SIGNAL';
   const deltaLabel = telemetry ? `${telemetry.mutatedBlocks}/${telemetry.totalBlocks} Δ` : '—';
   const latencyLabel =
     telemetry && telemetry.geminiState === 'CONNECTED' ? `${telemetry.streamLatencyMs}ms` : '—';
-  const geminiLabel = telemetry ? telemetry.geminiState : 'OFFLINE';
+  const geminiLabel = runtimeState
+    ? runtimeState.gemini
+    : telemetry
+      ? telemetry.geminiState
+      : 'OFFLINE';
+  const overallLabel = runtimeState ? runtimeState.overall : 'BOOTING';
+  const currentTask = runtimeState ? runtimeState.currentTask : 'Initializing…';
+
+  const overallTone: Record<OverallStatus, string> = {
+    ONLINE: 'text-emerald-400',
+    BOOTING: 'text-amber-400',
+    DEGRADED: 'text-orange-400',
+    ERROR: 'text-rose-400',
+  };
 
   const telemetryFields = [
+    { label: 'STATE', value: overallLabel },
     { label: 'CAPTURE', value: captureLabel },
     { label: 'DELTA', value: deltaLabel },
     { label: 'LINK', value: latencyLabel },
     { label: 'GEMINI', value: geminiLabel },
     { label: 'UPTIME', value: uptimeLabel },
   ];
+
+  const telemetryFieldTone = (label: string) =>
+    label === 'STATE' ? overallTone[runtimeState?.overall ?? 'BOOTING'] : 'text-cyan-300/80';
 
   // Render live visualization for synthesized tools
   const renderToolWidget = useCallback(() => {
@@ -222,6 +310,70 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
         </div>
 
         <div className="flex items-start gap-4">
+          {/* Real microphone control — reflects live MicManager state and
+              actually opens/closes the microphone via getUserMedia. */}
+          <div className="flex flex-col items-end gap-1">
+            <button
+              type="button"
+              onClick={onMicToggle}
+              aria-label={`Microphone: ${micStateLabel}${micListening ? ' — listening' : ''}. Click to ${micListening ? 'stop' : 'start'} listening`}
+              title={`Microphone ${micStateLabel}${micDevice ? ` — ${micDevice}` : ''}. Click to ${micListening ? 'stop' : 'start'} listening.`}
+              className={`group flex items-center gap-2 rounded-xl border px-3 py-2 transition-all duration-200 cursor-pointer ${
+                micListening
+                  ? 'border-emerald-500/40 bg-emerald-500/10 hover:bg-emerald-500/20'
+                  : micState?.state === 'ERROR' || micState?.state === 'PERMISSION_REQUIRED'
+                    ? 'border-rose-500/40 bg-rose-500/10 hover:bg-rose-500/20'
+                    : micAvailable
+                      ? 'border-blue-500/20 bg-[#ffffff03] hover:bg-blue-500/10 hover:border-blue-500/40'
+                      : 'border-[#ffffff10] bg-[#ffffff02]'
+              }`}
+            >
+              <span className="relative flex items-center justify-center w-6 h-6">
+                {micListening ? (
+                  <>
+                    <span className="absolute inset-0 rounded-full bg-emerald-400/40 animate-ping" />
+                    <Mic size={13} className="text-emerald-300 relative" />
+                  </>
+                ) : micState?.state === 'PERMISSION_REQUIRED' || micState?.state === 'ERROR' ? (
+                  <AlertTriangle size={13} className="text-rose-400" />
+                ) : micAvailable ? (
+                  <Mic size={13} className="text-blue-300/80 group-hover:text-blue-200" />
+                ) : (
+                  <MicOff size={13} className="text-[#ffffff25]" />
+                )}
+              </span>
+              <span
+                className={`font-mono text-[9px] font-bold tracking-[0.1em] ${
+                  micListening
+                    ? 'text-emerald-300'
+                    : micState?.state === 'PERMISSION_REQUIRED' || micState?.state === 'ERROR'
+                      ? 'text-rose-400'
+                      : micAvailable
+                        ? 'text-blue-300/70'
+                        : 'text-[#ffffff30]'
+                }`}
+              >
+                {micListening ? '● LISTENING' : micStateLabel}
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={runDiagnostic}
+              disabled={diagnosticBusy || !micAvailable}
+              aria-label="Run microphone diagnostic"
+              title="Run a real local microphone diagnostic (records a short sample locally, never transmitted)"
+              className="flex items-center gap-1 text-[8px] font-rajdhani font-bold tracking-[0.12em] uppercase text-[#ffffff35] hover:text-cyan-300/80 transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+            >
+              <Activity size={9} />
+              {diagnosticBusy ? 'Testing…' : 'Mic Test'}
+            </button>
+            {diagnosticResult && (
+              <span className="font-mono text-[8px] text-cyan-300/70 tracking-[0.05em] max-w-[220px] text-right">
+                {diagnosticResult}
+              </span>
+            )}
+          </div>
+
           {/* Live system telemetry strip */}
           <div className="glass-base rounded-xl border border-blue-500/10 px-4 py-2 flex items-center gap-4">
             {telemetryFields.map(field => (
@@ -229,7 +381,9 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
                 <span className="font-rajdhani text-[8px] font-bold tracking-[0.15em] text-[#ffffff30] uppercase">
                   {field.label}
                 </span>
-                <span className="font-mono text-[10px] font-bold text-cyan-300/80 tracking-[0.05em]">
+                <span
+                  className={`font-mono text-[10px] font-bold ${telemetryFieldTone(field.label)} tracking-[0.05em]`}
+                >
                   {field.value}
                 </span>
               </div>
@@ -245,7 +399,7 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
               {dateLabel}
             </p>
             <p className="font-mono text-[8px] text-cyan-400/60 tracking-[0.1em] mt-1">
-              SESSION {uptimeLabel}
+              {currentTask}
             </p>
           </div>
         </div>
@@ -367,6 +521,46 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
         </div>
       </div>
 
+      {/* Tool approval gate (human-in-the-loop) */}
+      {approvalRequest && (
+        <div
+          role="alertdialog"
+          aria-label="Tool synthesis requires approval"
+          className="flex-shrink-0 mb-4 glass-base rounded-xl border border-amber-500/40 p-4 flex flex-col gap-3 animate-slide-down"
+        >
+          <div className="flex items-center gap-2">
+            <Zap size={13} className="text-amber-400" />
+            <p className="font-orbitron text-[10px] font-bold text-amber-300 tracking-[0.12em] uppercase">
+              APPROVAL REQUIRED
+            </p>
+          </div>
+          <div>
+            <p className="font-rajdhani text-sm font-bold text-[#f5f8ff]">{approvalRequest.name}</p>
+            <p className="font-rajdhani text-[11px] text-[#ffffff50] leading-relaxed">
+              {approvalRequest.description}
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onReject}
+              aria-label="Reject tool synthesis"
+              className="px-4 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/40 text-rose-300 font-rajdhani text-xs font-bold tracking-[0.1em] uppercase hover:bg-rose-500/20 transition-all"
+            >
+              Reject
+            </button>
+            <button
+              type="button"
+              onClick={onApprove}
+              aria-label="Approve tool synthesis"
+              className="px-4 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-300 font-rajdhani text-xs font-bold tracking-[0.1em] uppercase hover:bg-emerald-500/20 transition-all"
+            >
+              Approve
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Bottom Interface Controls Wrapper */}
       <div className="flex flex-col gap-5 flex-shrink-0">
         {/* COMMAND INPUT BAR */}
@@ -391,14 +585,16 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
           <h5 className="font-rajdhani text-[10px] font-bold tracking-[0.2em] text-[#ffffff30] uppercase mb-2.5 px-1">
             SUGGESTED ACTIONS
           </h5>
-          <div className="grid grid-cols-4 gap-3.5">
+          <div className="hud-actions-grid grid grid-cols-4 gap-3.5">
             {actionCards.map(card => {
               const Icon = card.icon;
               return (
-                <div
+                <button
+                  type="button"
                   key={card.title}
                   onClick={() => onSearchSubmit(card.query)}
-                  className="glass-base p-3.5 rounded-xl flex items-center gap-3 hover:border-blue-500/30 hover:bg-[#ffffff05] cursor-pointer transition-all duration-200 group"
+                  aria-label={`${card.contextual ? 'Context action' : 'Action'}: ${card.title}`}
+                  className="glass-base p-3.5 rounded-xl flex items-center gap-3 hover:border-blue-500/30 hover:bg-[#ffffff05] cursor-pointer transition-all duration-200 group text-left"
                 >
                   <div className="w-8 h-8 rounded-lg bg-blue-500/5 border border-blue-500/10 flex items-center justify-center text-blue-400 group-hover:text-blue-300 group-hover:border-blue-500/25 transition-all duration-200">
                     <Icon size={13} />
@@ -411,7 +607,7 @@ export const CenterHUD: React.FC<CenterHUDProps> = ({
                       {card.title}
                     </span>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>

@@ -95,6 +95,15 @@ export class SqliteAdapter {
       .all(type, limit) as IInteractionLedgerEntry[];
   }
 
+  public getInteractionsByContext(contextSubstring: string, limit: number = 50): IInteractionLedgerEntry[] {
+    const db = this.ensureDb();
+    return db
+      .prepare(
+        'SELECT * FROM interaction_ledger WHERE context_snapshot_json LIKE ? ORDER BY timestamp_epoch DESC LIMIT ?',
+      )
+      .all(`%${contextSubstring}%`, limit) as IInteractionLedgerEntry[];
+  }
+
   public getInteractionsSince(sinceEpoch: number, limit: number = 100): IInteractionLedgerEntry[] {
     const db = this.ensureDb();
     return db

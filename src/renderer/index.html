@@ -4,12 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>NOVA Genesis Operating Intelligence</title>
-    <!-- Premium Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Outfit:wght@200;300;400;500;600&display=swap"
-      rel="stylesheet"
+    <link rel="icon" type="image/png" href="../../icon.png" />
+    <!--
+      Content-Security-Policy: the renderer never talks to a server — Gemini
+      audio/vision flows through main-process IPC. Fonts are bundled locally
+      (@fontsource), so nothing external is required offline. https/wss/blob are
+      allowed only for the optional live-stream widget feature.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https: wss:; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <style>
       body {

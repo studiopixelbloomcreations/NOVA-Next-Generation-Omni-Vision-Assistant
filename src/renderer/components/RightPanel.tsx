@@ -2,7 +2,12 @@
 import React, { useEffect, useRef } from 'react';
 import { Terminal } from 'lucide-react';
 import { LiveFeed } from './LiveFeed';
-import { ISystemTelemetryPayload, IContextChipPayload } from '../../shared/ipc_protocols';
+import {
+  ISystemTelemetryPayload,
+  IContextChipPayload,
+  IRuntimeStatePayload,
+  IActivityEventPayload,
+} from '../../shared/ipc_protocols';
 
 export interface ITranscriptEntry {
   sender: 'USER' | 'NOVA AI';
@@ -13,6 +18,8 @@ interface RightPanelProps {
   transcripts?: ITranscriptEntry[];
   createdTools?: any[];
   telemetry: ISystemTelemetryPayload | null;
+  runtimeState: IRuntimeStatePayload | null;
+  activityFeed: IActivityEventPayload[];
   contextChips: IContextChipPayload['chips'];
 }
 
@@ -22,27 +29,50 @@ const CHIP_SEVERITY_CLASSES: Record<IContextChipPayload['chips'][number]['severi
   critical: 'border-rose-500/50 text-rose-300/90',
 };
 
-function deriveSystemStatus(telemetry: ISystemTelemetryPayload | null): {
+// Real system status derived from the authoritative runtime state.
+function deriveSystemStatus(runtimeState: IRuntimeStatePayload | null): {
   label: string;
   className: string;
+  detail: string;
 } {
-  if (!telemetry) {
-    return { label: '—', className: 'text-[#ffffff40]' };
+  if (!runtimeState) {
+    return { label: 'INITIALIZING', className: 'text-amber-400', detail: 'Awaiting runtime state…' };
   }
-  switch (telemetry.geminiState) {
-    case 'CONNECTED':
-      return { label: 'OPTIMAL', className: 'text-cyan-400' };
-    case 'CONNECTING':
-      return { label: 'LINKING', className: 'text-amber-400' };
-    default:
-      return { label: 'DEGRADED', className: 'text-rose-400' };
+  switch (runtimeState.overall) {
+    case 'ONLINE':
+      return { label: 'ONLINE', className: 'text-emerald-400', detail: runtimeState.currentTask };
+    case 'BOOTING':
+      return { label: 'BOOTING', className: 'text-amber-400', detail: runtimeState.currentTask };
+    case 'DEGRADED':
+      return { label: 'DEGRADED', className: 'text-orange-400', detail: runtimeState.currentTask };
+    case 'ERROR':
+      return {
+        label: 'ERROR',
+        className: 'text-rose-400',
+        detail: runtimeState.lastError ?? runtimeState.currentTask,
+      };
   }
 }
+
+const ACTIVITY_TONE: Record<IActivityEventPayload['level'], string> = {
+  info: 'text-cyan-300/90',
+  success: 'text-emerald-400/90',
+  warn: 'text-amber-300/90',
+  error: 'text-rose-400/90',
+};
+
+const ACTIVITY_DOT: Record<IActivityEventPayload['level'], string> = {
+  info: 'bg-cyan-400/70',
+  success: 'bg-emerald-400/80',
+  warn: 'bg-amber-400/80',
+  error: 'bg-rose-400/80',
+};
 
 export const RightPanel: React.FC<RightPanelProps> = ({
   transcripts = [],
   createdTools = [],
-  telemetry,
+  runtimeState,
+  activityFeed,
   contextChips,
 }) => {
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -54,11 +84,11 @@ export const RightPanel: React.FC<RightPanelProps> = ({
     }
   }, [transcripts]);
 
-  const systemStatus = deriveSystemStatus(telemetry);
+  const systemStatus = deriveSystemStatus(runtimeState);
 
   return (
-    <div className="w-[320px] h-full border-l border-[#ffffff08] bg-[#02020540] p-6 flex flex-col gap-5 overflow-y-auto select-none">
-      {/* SYSTEM STATUS CARD */}
+    <div className="rail-right w-[320px] h-full border-l border-[#ffffff08] bg-[#02020540] p-6 flex flex-col gap-5 overflow-y-auto select-none">
+      {/* SYSTEM STATUS CARD — REAL runtime state (never fabricated) */}
       <div className="glass-base p-4 rounded-xl relative overflow-hidden flex-shrink-0">
         <div className="flex justify-between items-center">
           <div>
@@ -70,19 +100,82 @@ export const RightPanel: React.FC<RightPanelProps> = ({
             >
               {systemStatus.label}
             </p>
+            <p className="font-rajdhani text-[9px] font-medium text-[#ffffff45] tracking-[0.05em] mt-0.5 truncate max-w-[220px]">
+              {systemStatus.detail}
+            </p>
           </div>
           <span
             className={`w-1.5 h-1.5 rounded-full ${
-              telemetry?.geminiState === 'CONNECTED'
-                ? 'bg-cyan-400 animate-pulse'
-                : telemetry?.geminiState === 'CONNECTING'
+              runtimeState?.overall === 'ONLINE'
+                ? 'bg-emerald-400 animate-pulse'
+                : runtimeState?.overall === 'BOOTING'
                   ? 'bg-amber-400 animate-pulse'
-                  : telemetry
-                    ? 'bg-rose-400'
-                    : 'bg-[#ffffff20]'
+                  : runtimeState?.overall === 'DEGRADED'
+                    ? 'bg-orange-400'
+                    : runtimeState
+                      ? 'bg-rose-400'
+                      : 'bg-[#ffffff20]'
             }`}
           />
         </div>
+
+        {/* Real per-subsystem health grid */}
+        {runtimeState && (
+          <div className="mt-3 grid grid-cols-3 gap-1.5">
+            {[
+              { key: 'python', label: 'PY' },
+              { key: 'gemini', label: 'AI' },
+              { key: 'groq', label: 'GROQ' },
+              { key: 'memory', label: 'MEM' },
+              { key: 'toolRegistry', label: 'TOOLS' },
+              { key: 'microphone', label: 'MIC' },
+            ].map(({ key, label }) => {
+              const status = runtimeState[key as 'python' | 'gemini' | 'groq' | 'memory' | 'toolRegistry' | 'microphone'];
+              const color =
+                status === 'online'
+                  ? 'text-emerald-400/90 border-emerald-500/25'
+                  : status === 'unconfigured' || status === 'degraded'
+                    ? 'text-amber-400/90 border-amber-500/25'
+                    : status === 'error' || status === 'offline'
+                      ? 'text-rose-400/90 border-rose-500/25'
+                      : 'text-[#ffffff35] border-white/10';
+              return (
+                <div
+                  key={label}
+                  className={`border bg-[#ffffff02] rounded-md px-1.5 py-1 text-center ${color}`}
+                  title={runtimeState.details[key] ?? status}
+                >
+                  <span className="font-rajdhani text-[8px] font-bold tracking-[0.1em] uppercase">
+                    {label}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ACTIVITY FEED CARD — real runtime events pushed over IPC */}
+      <div className="glass-base p-4 rounded-xl flex flex-col gap-2 flex-shrink-0">
+        <h5 className="font-rajdhani text-[10px] font-bold tracking-[0.18em] text-[#ffffff50] uppercase">
+          ACTIVITY
+        </h5>
+        {activityFeed.length === 0 ? (
+          <p className="font-rajdhani text-[9px] text-[#ffffff25] uppercase tracking-[0.1em]">
+            Waiting for runtime events…
+          </p>
+        ) : (
+          <div className="flex flex-col gap-1.5 max-h-[150px] overflow-y-auto pr-1">
+            {activityFeed.slice(0, 12).map(evt => (
+              <div key={evt.id} className="flex items-start gap-2">
+                <span className={`w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0 ${ACTIVITY_DOT[evt.level]}`} />
+                <p className={`font-rajdhani text-[9px] font-semibold tracking-[0.02em] leading-snug ${ACTIVITY_TONE[evt.level]}`}>
+                  {evt.message}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* LIVE FEED CARD */}
@@ -91,10 +184,26 @@ export const RightPanel: React.FC<RightPanelProps> = ({
           <h5 className="font-rajdhani text-[10px] font-bold tracking-[0.18em] text-[#ffffff50] uppercase">
             LIVE FEED
           </h5>
-          <div className="flex items-center gap-1.5 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+          <div
+            className={`flex items-center gap-1.5 ${
+              runtimeState?.overall === 'ONLINE'
+                ? 'text-emerald-400'
+                : runtimeState?.overall === 'ERROR'
+                  ? 'text-rose-400'
+                  : 'text-amber-400'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                runtimeState?.overall === 'ONLINE'
+                  ? 'bg-emerald-400'
+                  : runtimeState?.overall === 'ERROR'
+                    ? 'bg-rose-400'
+                    : 'bg-amber-400'
+              }`}
+            />
             <span className="font-rajdhani text-[9px] font-bold tracking-[0.15em] uppercase">
-              ONLINE
+              {runtimeState?.overall ?? 'BOOTING'}
             </span>
           </div>
         </div>

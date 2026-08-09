@@ -1,13 +1,18 @@
 // src/renderer/components/HUDUI.tsx
 import React from 'react';
 import { Sidebar, IProgressStep } from './Sidebar';
-import { CenterHUD } from './CenterHUD';
+import { CenterHUD, IToolApprovalRequest } from './CenterHUD';
 import { RightPanel, ITranscriptEntry } from './RightPanel';
 import { WebGLWaveform } from './WebGLWaveform';
+import { WorkspacePanel } from './WorkspacePanel';
 import {
   NovaVoiceState,
   ISystemTelemetryPayload,
   IContextChipPayload,
+  IRuntimeStatePayload,
+  IActivityEventPayload,
+  IMicStatePayload,
+  IWorkspaceSurface,
 } from '../../shared/ipc_protocols';
 
 interface HUDUIProps {
@@ -20,11 +25,22 @@ interface HUDUIProps {
   activeToolId?: string | null;
   setActiveToolId?: (id: string | null) => void;
   telemetry: ISystemTelemetryPayload | null;
+  runtimeState: IRuntimeStatePayload | null;
+  activityFeed: IActivityEventPayload[];
   contextChips: IContextChipPayload['chips'];
+  micState: IMicStatePayload | null;
+  onMicToggle: () => void;
+  onMicDiagnostic: () => Promise<any>;
   onSearchSubmit: (text: string) => void;
   toolSynthesisPhase?: string;
   toolSynthesisSteps?: any[];
   showToolSynthesis?: boolean;
+  approvalRequest?: IToolApprovalRequest | null;
+  onApprove?: () => void;
+  onReject?: () => void;
+  workspaceSurfaces?: IWorkspaceSurface[];
+  onCloseSurface?: (id: string) => void;
+  onOpenUrl?: (url: string) => void;
 }
 
 export const HUDUI: React.FC<HUDUIProps> = ({
@@ -37,11 +53,22 @@ export const HUDUI: React.FC<HUDUIProps> = ({
   activeToolId = null,
   setActiveToolId = () => {},
   telemetry,
+  runtimeState,
+  activityFeed,
   contextChips,
+  micState,
+  onMicToggle,
+  onMicDiagnostic,
   onSearchSubmit,
   toolSynthesisPhase = 'IDLE',
   toolSynthesisSteps = [],
   showToolSynthesis = true,
+  approvalRequest = null,
+  onApprove = () => {},
+  onReject = () => {},
+  workspaceSurfaces = [],
+  onCloseSurface = () => {},
+  onOpenUrl = () => {},
 }) => {
   return (
     <div className="w-screen h-screen bg-[#020205] flex flex-col relative overflow-hidden text-white font-rajdhani select-none border border-blue-500/10">
@@ -56,6 +83,7 @@ export const HUDUI: React.FC<HUDUIProps> = ({
             onTabChange={() => {}}
             progressSteps={progressSteps}
             geminiState={telemetry?.geminiState}
+            runtimeState={runtimeState}
           />
         </div>
 
@@ -67,19 +95,34 @@ export const HUDUI: React.FC<HUDUIProps> = ({
             activeToolId={activeToolId}
             setActiveToolId={setActiveToolId}
             telemetry={telemetry}
+            runtimeState={runtimeState}
             contextChips={contextChips}
+            micState={micState}
+            onMicToggle={onMicToggle}
+            onMicDiagnostic={onMicDiagnostic}
             toolSynthesisPhase={toolSynthesisPhase}
             toolSynthesisSteps={toolSynthesisSteps}
             showToolSynthesis={showToolSynthesis}
+            approvalRequest={approvalRequest}
+            onApprove={onApprove}
+            onReject={onReject}
           />
+          {workspaceSurfaces.some(s => s.state === 'open') && (
+            <div className="absolute inset-0 z-20 bg-[#020205F2]">
+              <WorkspacePanel surfaces={workspaceSurfaces} onClose={onCloseSurface} onOpenUrl={onOpenUrl} />
+            </div>
+          )}
         </div>
 
+        {/* NOVA WORKSPACE — internal surfaces (workspace-first) */}
         {/* RIGHT METRICS DASHBOARD PANEL */}
         <div className="relative z-10 flex-shrink-0">
           <RightPanel
             transcripts={transcripts}
             createdTools={createdTools}
             telemetry={telemetry}
+            runtimeState={runtimeState}
+            activityFeed={activityFeed}
             contextChips={contextChips}
           />
         </div>

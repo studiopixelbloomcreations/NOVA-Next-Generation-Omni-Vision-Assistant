@@ -3,8 +3,11 @@ import { EventEmitter } from 'events';
 import { spawn, ChildProcess } from 'child_process';
 import { graphEngine } from '../db/graph_engine';
 import { IContextChipPayload } from '../../shared/ipc_protocols';
+import { NovaConfig } from '../core/config';
+import { scrubEnv } from '../utils/security';
+import { logger } from '../core/logger';
 
-const POLL_INTERVAL_MS = 2000;
+const POLL_INTERVAL_MS = NovaConfig.context.pollIntervalMs;
 const TITLE_MAX_LENGTH = 40;
 
 let powershellProcess: ChildProcess | null = null;
@@ -12,6 +15,7 @@ let powershellProcess: ChildProcess | null = null;
 function startPowerShellSession(): ChildProcess | null {
   const ps = spawn('powershell', ['-NoProfile', '-NonInteractive', '-Command', '-'], {
     windowsHide: true,
+    env: scrubEnv(),
   });
 
   // Attach stdout handler immediately to catch __NOVA_READY__
@@ -27,7 +31,7 @@ function startPowerShellSession(): ChildProcess | null {
       const idx = (ps as any).outputBuffer.indexOf('__NOVA_READY__');
       (ps as any).outputBuffer = (ps as any).outputBuffer.slice(idx + '__NOVA_READY__'.length);
       (ps as any).ready = true;
-      console.log('[context_engine] PowerShell session ready');
+      logger.info('[context_engine] PowerShell session ready');
     }
 
     while ((ps as any).outputBuffer.includes('__NOVA_QUERY_COMPLETE__')) {
@@ -46,11 +50,11 @@ function startPowerShellSession(): ChildProcess | null {
   });
 
   ps.stderr?.on('data', (data: Buffer) => {
-    console.error('[context_engine] PowerShell stderr:', data.toString());
+    logger.warn('[context_engine] PowerShell stderr:', { line: data.toString() });
   });
 
   ps.on('error', err => {
-    console.error('[context_engine] PowerShell process error:', err);
+    logger.error('[context_engine] PowerShell process error', { error: err.message });
     (ps as any).ready = false;
     if ((ps as any).pendingReject) {
       (ps as any).pendingReject(err);
@@ -60,7 +64,7 @@ function startPowerShellSession(): ChildProcess | null {
   });
 
   ps.on('exit', code => {
-    console.error('[context_engine] PowerShell process exited with code:', code);
+    logger.warn('[context_engine] PowerShell process exited', { code });
     (ps as any).ready = false;
     if ((ps as any).pendingReject) {
       (ps as any).pendingReject(new Error(`PowerShell process exited with code ${code}`));
@@ -245,10 +249,9 @@ export class ContextEngine extends EventEmitter {
     } catch (err) {
       if (!this.hasLoggedPollError) {
         this.hasLoggedPollError = true;
-        console.error(
-          '[context_engine] foreground window poll failed (suppressing repeats until recovery):',
-          err,
-        );
+        logger.warn('[context_engine] foreground window poll failed (suppressing repeats until recovery)', {
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
       // Force restart PowerShell session on error
       if (powershellProcess) {

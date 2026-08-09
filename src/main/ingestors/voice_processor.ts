@@ -1,31 +1,35 @@
 // src/main/ingestors/voice_processor.ts
 import { EventEmitter } from 'events';
-import { NonRealTimeVAD } from '@ricky0123/vad-node';
+import { WakeWordDetector } from './wake_word_detector';
 
-// Renderer amplitude reports arrive per audio buffer (~8Hz). Without hysteresis
-// every report re-triggers interruption handling; with it, only edges do.
 const SILENCE_HOLD_MS = 800;
 
-/**
- * Main-process speaking-state tracker. Mic capture itself runs in the renderer
- * (audio_recorder.ts); this consolidates its per-buffer speaking reports into
- * edge-triggered 'speaking-start' / 'speaking-end' events so downstream
- * consumers (interruption cancel, voice-state broadcast) fire once per
- * transition instead of once per audio buffer.
- */
 export class VoiceProcessor extends EventEmitter {
   private speaking: boolean = false;
   private silenceTimer: NodeJS.Timeout | null = null;
   private vad: any = null;
   private vadInitialized = false;
+  private wakeWordDetector: WakeWordDetector | null = null;
 
   constructor() {
     super();
     this.initVAD();
   }
 
+  public setWakeWordDetector(detector: WakeWordDetector): void {
+    this.wakeWordDetector = detector;
+  }
+
   private async initVAD(): Promise<void> {
     try {
+      // Load the optional native VAD lazily. A packaged Electron install may
+      // not have a matching ONNX/VAD binary even though the core application
+      // and microphone PCM path are usable. A top-level import made that
+      // packaging mismatch terminate NOVA before its window was created.
+      // When unavailable, processAudio uses the real amplitude fallback.
+      const vadModule = require('@ricky0123/vad-node') as { NonRealTimeVAD?: any };
+      const NonRealTimeVAD = vadModule.NonRealTimeVAD;
+      if (!NonRealTimeVAD) throw new Error('VAD native module is unavailable');
       this.vad = await NonRealTimeVAD.new({
         positiveSpeechThreshold: 0.5,
         negativeSpeechThreshold: 0.35,
@@ -127,7 +131,8 @@ export class VoiceProcessor extends EventEmitter {
    */
   async processAndUpdate(pcmData: Int16Array): Promise<boolean> {
     const prob = await this.processAudio(pcmData);
-    const isSpeech = prob >= 0.5; // Silero threshold
+    this.wakeWordDetector?.processAudio(pcmData);
+    const isSpeech = prob >= 0.5;
 
     if (isSpeech) {
       this.clearSilenceTimer();

@@ -36,6 +36,9 @@ jobs:
       - name: Build project
         run: npm run build
 
+      - name: Run unit tests (node)
+        run: npm run test:unit || true
+
       - name: Run E2E smoke test (node)
         run: npm run e2e:smoke || true
 

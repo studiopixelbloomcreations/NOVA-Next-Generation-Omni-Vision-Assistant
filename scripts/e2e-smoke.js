@@ -3,9 +3,38 @@
 // path (no GEMINI_API_KEY) to generate a tool and exercise handleToolCall.
 
 const path = require('path');
+const fs = require('fs');
+
+// Renderer bundle guard: the packaged window loads the emitted HTML via
+// loadFile, so a path regression would ship a blank window that no other
+// automated check catches. Verify the HTML exists at one of the candidate
+// layouts and that every asset it references actually resolves.
+function verifyRendererBundle() {
+  const htmlCandidates = [
+    path.join(__dirname, '..', 'dist', 'renderer', 'index.html'),
+    path.join(__dirname, '..', 'dist', 'renderer', 'src', 'renderer', 'index.html'),
+  ];
+  const html = htmlCandidates.find(p => fs.existsSync(p));
+  if (!html) {
+    console.error('[e2e-smoke] renderer index.html missing (loadFile path regression)');
+    process.exit(5);
+  }
+  const content = fs.readFileSync(html, 'utf-8');
+  const refs = [...content.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map(m => m[1]);
+  for (const ref of refs) {
+    const resolved = path.resolve(path.dirname(html), ref);
+    if (!fs.existsSync(resolved)) {
+      console.error('[e2e-smoke] renderer asset missing:', ref);
+      process.exit(6);
+    }
+  }
+  console.log('[e2e-smoke] renderer bundle OK:', path.relative(process.cwd(), html));
+}
 
 async function run() {
   try {
+    verifyRendererBundle();
+
     // Load compiled agent orchestrator from dist
     const agentPath = path.join(__dirname, '..', 'dist', 'main', 'services', 'agent_orchestrator.js');
     const orchestratorModule = require(agentPath);

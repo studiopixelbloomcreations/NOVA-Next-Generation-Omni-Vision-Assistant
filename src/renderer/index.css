@@ -1,9 +1,58 @@
+/* Locally bundled fonts (no Google CDN dependency — works fully offline). */
+@import '@fontsource/orbitron/400.css';
+@import '@fontsource/orbitron/500.css';
+@import '@fontsource/orbitron/700.css';
+@import '@fontsource/orbitron/900.css';
+@import '@fontsource/rajdhani/400.css';
+@import '@fontsource/rajdhani/500.css';
+@import '@fontsource/rajdhani/600.css';
+@import '@fontsource/rajdhani/700.css';
+@import '@fontsource/share-tech-mono/400.css';
+@import '@fontsource/outfit/200.css';
+@import '@fontsource/outfit/300.css';
+@import '@fontsource/outfit/400.css';
+@import '@fontsource/outfit/500.css';
+@import '@fontsource/outfit/600.css';
 @import 'tailwindcss';
 
 @layer base {
   body {
     font-family: 'Outfit', 'Rajdhani', sans-serif;
     background-color: #020205;
+  }
+}
+
+/* Accessibility: visible keyboard focus. */
+:focus-visible {
+  outline: 2px solid rgba(0, 212, 255, 0.85);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Accessibility: honor reduced-motion preference. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Responsive layout: collapse side rails on narrow windows. */
+@media (max-width: 1100px) {
+  .rail-right {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .rail-left {
+    display: none;
+  }
+  .hud-actions-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 }
 

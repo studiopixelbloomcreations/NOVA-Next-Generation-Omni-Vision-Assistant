@@ -1,7 +1,11 @@
 // src/renderer/components/Sidebar.tsx
 import React, { useState, useEffect } from 'react';
 import { Loader, CheckCircle, AlertCircle, Circle } from 'lucide-react';
-import { ISystemTelemetryPayload } from '../../shared/ipc_protocols';
+import {
+  ISystemTelemetryPayload,
+  IRuntimeStatePayload,
+  OverallStatus,
+} from '../../shared/ipc_protocols';
 
 export interface IProgressStep {
   stepId: string;
@@ -15,9 +19,22 @@ interface SidebarProps {
   onTabChange?: (tab: string) => void;
   progressSteps?: IProgressStep[];
   geminiState?: ISystemTelemetryPayload['geminiState'];
+  runtimeState?: IRuntimeStatePayload | null;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiState }) => {
+// Real overall-status styling derived from the authoritative runtime state.
+const OVERALL_STYLE: Record<OverallStatus, { label: string; text: string; ping: string; dot: string }> = {
+  ONLINE: { label: 'ONLINE', text: 'text-emerald-400/70', ping: 'bg-emerald-400', dot: 'bg-emerald-500' },
+  BOOTING: { label: 'BOOTING', text: 'text-amber-400/70', ping: 'bg-amber-400', dot: 'bg-amber-500' },
+  DEGRADED: { label: 'DEGRADED', text: 'text-orange-400/70', ping: 'bg-orange-400', dot: 'bg-orange-500' },
+  ERROR: { label: 'ERROR', text: 'text-rose-400/70', ping: 'bg-rose-400', dot: 'bg-rose-500' },
+};
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  progressSteps = [],
+  geminiState,
+  runtimeState,
+}) => {
   const [glowPulse, setGlowPulse] = useState(0);
 
   // Animate the progress bar glow pulse
@@ -33,17 +50,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
     return () => cancelAnimationFrame(frameId);
   }, []);
 
-  const connection =
-    geminiState === 'CONNECTED'
-      ? {
-          label: 'ONLINE',
-          text: 'text-emerald-400/70',
-          ping: 'bg-emerald-400',
-          dot: 'bg-emerald-500',
-        }
+  // Bottom-left indicator reflects the REAL overall runtime state. When the
+  // authoritative state has not arrived yet, fall back to the telemetry
+  // Gemini state — but never fabricate an ONLINE value.
+  const connection = runtimeState
+    ? OVERALL_STYLE[runtimeState.overall]
+    : geminiState === 'CONNECTED'
+      ? OVERALL_STYLE.ONLINE
       : geminiState === 'CONNECTING'
-        ? { label: 'LINKING', text: 'text-amber-400/70', ping: 'bg-amber-400', dot: 'bg-amber-500' }
-        : { label: 'OFFLINE', text: 'text-rose-400/70', ping: 'bg-rose-400', dot: 'bg-rose-500' };
+        ? OVERALL_STYLE.BOOTING
+        : OVERALL_STYLE.ERROR;
 
   const completedCount = progressSteps.filter(s => s.status === 'completed').length;
   const totalSteps = progressSteps.length;
@@ -72,7 +88,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
   };
 
   return (
-    <div className="w-[240px] h-full flex flex-col justify-between border-r border-[#ffffff08] bg-[#02020550] px-5 py-8 select-none">
+    <div className="rail-left w-[240px] h-full flex flex-col justify-between border-r border-[#ffffff08] bg-[#02020550] px-5 py-8 select-none">
       {/* Top Header Section */}
       <div>
         <div className="mb-10 px-2">
@@ -161,7 +177,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
         </div>
       </div>
 
-      {/* Sidebar Footer Section */}
+      {/* Sidebar Footer Section — real subsystem health from runtime state */}
       <div className="px-2">
         <div className="flex items-center gap-3">
           <div className="w-[32px] h-[32px] rounded-lg bg-[radial-gradient(circle_at_center,rgba(56,132,255,0.3)_0%,rgba(0,0,0,0.5)_100%)] border border-blue-500/20 flex items-center justify-center relative">
@@ -184,8 +200,60 @@ export const Sidebar: React.FC<SidebarProps> = ({ progressSteps = [], geminiStat
             >
               {connection.label}
             </p>
+            {runtimeState && runtimeState.currentTask && (
+              <p className="font-rajdhani text-[8px] text-[#ffffff40] tracking-[0.05em] mt-0.5 truncate max-w-[130px]">
+                {runtimeState.currentTask}
+              </p>
+            )}
           </div>
         </div>
+
+        {/* Real per-subsystem health chips (only when runtime state exists) */}
+        {runtimeState && (
+          <div className="mt-3 flex flex-col gap-1.5">
+            {[
+              { key: 'python', label: 'PYTHON' },
+              { key: 'gemini', label: 'GEMINI' },
+              { key: 'groq', label: 'GROQ' },
+              { key: 'memory', label: 'MEMORY' },
+              { key: 'tools', label: 'TOOLS' },
+            ].map(({ key, label }) => {
+              const status =
+                key === 'tools'
+                  ? runtimeState.toolRegistry === 'online' && runtimeState.toolExecutor === 'online'
+                    ? 'online'
+                    : 'offline'
+                  : runtimeState[key as 'python' | 'gemini' | 'groq' | 'memory'];
+              const dot =
+                status === 'online'
+                  ? 'bg-emerald-400'
+                  : status === 'unconfigured' || status === 'degraded'
+                    ? 'bg-amber-400'
+                    : status === 'error' || status === 'offline'
+                      ? 'bg-rose-400'
+                      : 'bg-[#ffffff30]';
+              return (
+                <div key={label} className="flex items-center gap-2">
+                  <span className={`w-1.5 h-1.5 rounded-full ${dot}`} />
+                  <span className="font-rajdhani text-[8px] font-bold tracking-[0.15em] text-[#ffffff35] uppercase">
+                    {label}
+                  </span>
+                  <span className="font-rajdhani text-[8px] font-medium tracking-[0.05em] text-[#ffffff45] uppercase ml-auto">
+                    {status}
+                  </span>
+                </div>
+              );
+            })}
+            {runtimeState.lastError && (
+              <p
+                className="font-rajdhani text-[8px] text-rose-400/80 tracking-[0.03em] mt-1 leading-snug"
+                title={runtimeState.lastError}
+              >
+                ⚠ {runtimeState.lastError.slice(0, 120)}
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,39 +1,101 @@
 // src/main/ingestors/wake_word_detector.ts
 import { EventEmitter } from 'events';
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { logger } from '../core/logger';
+
+let PorcupineClass: typeof import('@picovoice/porcupine-node').Porcupine | null = null;
+try {
+  const mod = require('@picovoice/porcupine-node');
+  PorcupineClass = mod.Porcupine;
+} catch {
+  PorcupineClass = null;
+}
+
+export interface WakeWordEvent {
+  buffer: Int16Array;
+  keyword: string;
+  timestamp: number;
+}
 
 export class WakeWordDetector extends EventEmitter {
   private isActive = false;
   private audioBuffer: Int16Array[] = [];
   private bufferSize = 0;
   private lastDetection = 0;
+  private porcupineInstance: any = null;
+  private mode: 'real-porcupine' | 'fallback-rms' = 'fallback-rms';
 
   constructor() {
     super();
   }
 
   async initialize(): Promise<void> {
-    console.log('[WakeWordDetector] Initialized (fallback mode - no Porcupine access key)');
-    // Porcupine requires an access key from Picovoice Console.
-    // For production, set PICOVOICE_ACCESS_KEY env var and use @picovoice/porcupine-node.
+    const accessKey = process.env.PICOVOICE_ACCESS_KEY;
+    const keywordPaths = [
+      join(__dirname, '..', '..', 'native_modules', 'keyword_files', 'porcupine.ppn'),
+      join(__dirname, '..', '..', 'native_modules', 'keyword_files', 'wake_word.ppn'),
+    ];
+    let keywordPath: string | undefined;
+    for (const p of keywordPaths) {
+      if (existsSync(p)) {
+        keywordPath = p;
+        break;
+      }
+    }
+
+    if (accessKey && keywordPath && PorcupineClass) {
+      try {
+        const instance = (PorcupineClass as any).fromKeywordPaths
+          ? (PorcupineClass as any).fromKeywordPaths(accessKey, [keywordPath], [0.5])
+          : new (PorcupineClass as any)(accessKey, keywordPath, 0.5);
+        this.porcupineInstance = instance;
+        this.mode = 'real-porcupine';
+        logger.info('[WakeWordDetector] Porcupine initialized with keyword file', { keywordPath });
+      } catch (err) {
+        logger.error('[WakeWordDetector] Failed to initialize Porcupine, falling back to RMS mode', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        this.mode = 'fallback-rms';
+      }
+    } else {
+      const reason = !accessKey
+        ? 'no PICOVOICE_ACCESS_KEY'
+        : !keywordPath
+          ? 'no keyword file found'
+          : '@picovoice/porcupine-node not available';
+      logger.info('[WakeWordDetector] Initialized', { mode: this.mode, reason });
+    }
   }
 
   processAudio(pcmData: Int16Array): void {
     if (!this.isActive) return;
 
-    // Add to ring buffer
     this.audioBuffer.push(pcmData);
     this.bufferSize += pcmData.length;
 
-    // Keep buffer at max size (2500ms = 40000 samples at 16kHz)
     const maxSamples = 40000;
     while (this.bufferSize > maxSamples) {
       const removed = this.audioBuffer.shift();
       if (removed) this.bufferSize -= removed.length;
     }
 
-    // Simple energy-based wake word fallback.
-    // Compute RMS for the incoming chunk and emit 'wake-word-detected' when it exceeds a threshold.
-    // Threshold can be tuned via PICOVOICE_FALLBACK_THRESHOLD env var (integer RMS value).
+    if (this.mode === 'real-porcupine' && this.porcupineInstance) {
+      try {
+        const keywordIndex = this.porcupineInstance.process(pcmData);
+        if (keywordIndex !== -1) {
+          const now = Date.now();
+          const buffer = this.getRingBuffer();
+          this.emit('wake-word-detected', { buffer, keyword: 'porcupine', timestamp: now });
+        }
+      } catch (err) {
+        logger.error('[WakeWordDetector] Porcupine process error', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      return;
+    }
+
     const computeRms = (samples: Int16Array): number => {
       let sum = 0;
       for (let i = 0; i < samples.length; i++) {
@@ -48,7 +110,6 @@ export class WakeWordDetector extends EventEmitter {
 
     const rms = computeRms(pcmData);
     const now = Date.now();
-    // Require a modest amount of buffered audio for context and debounce between detections.
     if (this.bufferSize >= 8000 && rms > threshold && now - this.lastDetection > 2000) {
       this.lastDetection = now;
       const buffer = this.getRingBuffer();
@@ -69,22 +130,33 @@ export class WakeWordDetector extends EventEmitter {
 
   start(): void {
     this.isActive = true;
-    console.log('[WakeWordDetector] Wake word detection started (fallback mode)');
+    logger.info('[WakeWordDetector] Wake word detection started', { mode: this.mode });
   }
 
   stop(): void {
     this.isActive = false;
     this.audioBuffer = [];
     this.bufferSize = 0;
-    console.log('[WakeWordDetector] Wake word detection stopped');
+    logger.info('[WakeWordDetector] Wake word detection stopped');
   }
 
   async release(): Promise<void> {
+    if (this.porcupineInstance) {
+      try {
+        this.porcupineInstance.release();
+      } catch (err) {
+        logger.error('[WakeWordDetector] Failed to release Porcupine instance', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      } finally {
+        this.porcupineInstance = null;
+      }
+    }
     this.stop();
   }
 
   isReady(): boolean {
-    return true; // Always ready in fallback mode
+    return true;
   }
 }
 
