@@ -493,11 +493,10 @@ function registerGeminiBridgeHandlers(): void {
   });
 
   geminiLiveBridge.on('user-text-transcribed', (text: string) => {
-    // Local Whisper is the canonical command transcript. Gemini still receives
-    // microphone audio for its conversational response, but its slower input
-    // transcription must not duplicate or delay the local stream.
-    if (localWhisperActive) return;
-    sendToRenderer(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, text);
+    // Gemini Live input transcription is the low-latency display stream. Local
+    // Whisper remains warmed as an offline/connection-loss fallback, but must
+    // not delay the words that the user is currently speaking.
+    sendToRenderer(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, { text, partial: true });
   });
 
   geminiLiveBridge.on('connection-state-change', (state: string) => {
@@ -564,7 +563,10 @@ function registerGeminiBridgeHandlers(): void {
       // already resolved the turn by calling a tool itself). The result is
       // broadcast as a NOVA AI transcript entry so the user sees real output.
       const spoken = (interaction.transcriptInput ?? '').trim();
-      if (spoken && !localWhisperActive && !voiceTurnHandledByToolCall) {
+      if (spoken && geminiLiveBridge.isSessionReady()) {
+        sendToRenderer(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, { text: spoken, partial: false });
+      }
+      if (spoken && !voiceTurnHandledByToolCall) {
         void routeVoiceRequest(spoken);
       }
       voiceTurnHandledByToolCall = false;
@@ -574,16 +576,20 @@ function registerGeminiBridgeHandlers(): void {
 
 function registerWhisperHandlers(): void {
   whisperLiveBridge.on('partial', (text: string) => {
+    if (geminiLiveBridge.isSessionReady()) return;
     sendToRenderer(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, { text, partial: true });
   });
   whisperLiveBridge.on('final', (text: string) => {
+    if (geminiLiveBridge.isSessionReady()) return;
     sendToRenderer(NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, { text, partial: false });
     if (text.trim()) void routeVoiceRequest(text.trim());
   });
   whisperLiveBridge.on('error', (err: Error) => {
-    localWhisperActive = false;
-    logger.warn('[whisper] local transcription unavailable; Gemini fallback active', { error: err.message });
-    runtimeState.log('warn', 'Local Whisper unavailable; using Gemini transcription fallback.');
+    // A worker restart is recoverable. Do not permanently disable local
+    // Whisper after one transient IPC failure; the next audio frame will use
+    // PythonRuntime's automatic restart path.
+    logger.warn('[whisper] local transcription frame failed; retrying worker', { error: err.message });
+    runtimeState.log('warn', 'Local Whisper frame delayed; retrying worker.');
   });
 }
 

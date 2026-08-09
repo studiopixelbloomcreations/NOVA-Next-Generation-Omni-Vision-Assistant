@@ -22,6 +22,8 @@ _audio = bytearray()
 _last_decode = 0.0
 _last_text = ""
 _model_started = 0.0
+STREAM_WINDOW_SECONDS = 4
+PARTIAL_INTERVAL_SECONDS = 0.20
 
 
 def _model_name() -> str:
@@ -52,10 +54,10 @@ def _get_model():
 def _decode(force: bool = False) -> Dict[str, Any]:
     global _last_decode, _last_text
     now = time.perf_counter()
-    if not force and now - _last_decode < 0.30:
+    if not force and now - _last_decode < PARTIAL_INTERVAL_SECONDS:
         return {"ready": True, "text": _last_text, "partial": True, "skipped": True}
     # Decode a short rolling window to keep latency bounded.
-    samples = np.frombuffer(bytes(_audio[-16000 * 6 * 2:]), dtype=np.int16).astype(np.float32) / 32768.0
+    samples = np.frombuffer(bytes(_audio[-16000 * STREAM_WINDOW_SECONDS * 2:]), dtype=np.int16).astype(np.float32) / 32768.0
     if samples.size < 1600:
         return {"ready": True, "text": _last_text, "partial": True, "skipped": True}
     started = time.perf_counter()
@@ -65,6 +67,7 @@ def _decode(force: bool = False) -> Dict[str, Any]:
         beam_size=1,
         best_of=1,
         temperature=0.0,
+        without_timestamps=True,
         vad_filter=False,
         condition_on_previous_text=False,
     )

@@ -1,7 +1,10 @@
 import { EventEmitter } from 'events';
 import { pythonRuntime } from './python_runtime';
 
-const FLUSH_BYTES = 16000 * 2 * 0.32;
+// Send short frames so the first partial is not held behind a long audio
+// buffer. The Python side throttles decoding independently when inference is
+// still busy, so this keeps capture responsive without spawning decoders.
+const FLUSH_BYTES = 16000 * 2 * 0.20;
 
 /** Streams microphone PCM to the persistent Python faster-whisper worker. */
 export class WhisperLiveBridge extends EventEmitter {

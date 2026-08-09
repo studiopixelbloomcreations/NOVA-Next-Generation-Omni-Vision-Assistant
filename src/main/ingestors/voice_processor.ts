@@ -2,7 +2,9 @@
 import { EventEmitter } from 'events';
 import { WakeWordDetector } from './wake_word_detector';
 
-const SILENCE_HOLD_MS = 800;
+// End a turn promptly after the user stops speaking. Gemini Live has its own
+// server VAD, while local Whisper needs this only to emit the final segment.
+const SILENCE_HOLD_MS = 300;
 
 export class VoiceProcessor extends EventEmitter {
   private speaking: boolean = false;

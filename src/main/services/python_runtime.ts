@@ -80,6 +80,10 @@ export class PythonRuntime {
   private stopping = false;
   private stopped = false;
   private restartTimer: NodeJS.Timeout | null = null;
+  // Several boot services (Whisper, microphone discovery, and workspace
+  // initialization) can request the worker concurrently. Serialize startup
+  // so two children are never spawned and one cannot orphan the other.
+  private startPromise: Promise<boolean> | null = null;
   private restartDelay = RESTART_BACKOFF_MS;
 
   constructor(executable?: string) {
@@ -224,6 +228,17 @@ export class PythonRuntime {
 
   /** Starts the persistent worker (idempotent). Returns false when Python is missing. */
   public async startWorker(): Promise<boolean> {
+    if (this.isWorkerAlive()) return true;
+    if (this.startPromise) return this.startPromise;
+    this.startPromise = this.startWorkerInternal();
+    try {
+      return await this.startPromise;
+    } finally {
+      this.startPromise = null;
+    }
+  }
+
+  private async startWorkerInternal(): Promise<boolean> {
     if (this.stopped) return false; // permanently stopped (shutdown)
     if (this.isWorkerAlive()) return true;
     if (!fs.existsSync(path.join(this.packageRoot, 'nova_runtime', '__main__.py'))) {
