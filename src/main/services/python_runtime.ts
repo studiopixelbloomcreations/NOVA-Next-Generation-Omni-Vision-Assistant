@@ -55,13 +55,13 @@ interface PendingRequest {
 function resolvePackageRoot(): string {
   const fromEnv = NovaConfig.python.packageRoot;
   if (fromEnv && fs.existsSync(path.join(fromEnv, 'nova_runtime'))) return fromEnv;
-  const cwdCandidate = path.join(process.cwd(), 'python');
-  if (fs.existsSync(path.join(cwdCandidate, 'nova_runtime'))) return cwdCandidate;
   const resourcesPath = (process as { resourcesPath?: string }).resourcesPath;
   if (resourcesPath) {
     const packagedCandidate = path.join(resourcesPath, 'app', 'python');
     if (fs.existsSync(path.join(packagedCandidate, 'nova_runtime'))) return packagedCandidate;
   }
+  const cwdCandidate = path.join(process.cwd(), 'python');
+  if (fs.existsSync(path.join(cwdCandidate, 'nova_runtime'))) return cwdCandidate;
   const appCandidate = path.join(__dirname, '..', '..', '..', 'python');
   if (fs.existsSync(path.join(appCandidate, 'nova_runtime'))) return appCandidate;
   return fromEnv || cwdCandidate;
