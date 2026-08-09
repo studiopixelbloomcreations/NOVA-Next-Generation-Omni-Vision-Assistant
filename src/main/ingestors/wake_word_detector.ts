@@ -24,14 +24,20 @@ export class WakeWordDetector extends EventEmitter {
   private bufferSize = 0;
   private lastDetection = 0;
   private porcupineInstance: any = null;
-  private mode: 'real-porcupine' | 'fallback-rms' = 'fallback-rms';
+  private mode: 'real-porcupine' | 'fallback-rms' | 'unavailable' = 'unavailable';
+  private accessKey = '';
 
   constructor() {
     super();
   }
 
+  /** Configure the wake-word provider without exposing its secret through process.env. */
+  setAccessKey(accessKey: string): void {
+    this.accessKey = accessKey?.trim() ?? '';
+  }
+
   async initialize(): Promise<void> {
-    const accessKey = process.env.PICOVOICE_ACCESS_KEY;
+    const accessKey = this.accessKey;
     const keywordPaths = [
       join(__dirname, '..', '..', 'native_modules', 'keyword_files', 'porcupine.ppn'),
       join(__dirname, '..', '..', 'native_modules', 'keyword_files', 'wake_word.ppn'),
@@ -53,18 +59,21 @@ export class WakeWordDetector extends EventEmitter {
         this.mode = 'real-porcupine';
         logger.info('[WakeWordDetector] Porcupine initialized with keyword file', { keywordPath });
       } catch (err) {
-        logger.error('[WakeWordDetector] Failed to initialize Porcupine, falling back to RMS mode', {
+        logger.error('[WakeWordDetector] Failed to initialize Porcupine', {
           error: err instanceof Error ? err.message : String(err),
         });
         this.mode = 'fallback-rms';
       }
+    } else if (keywordPath) {
+      // RMS remains a deliberately explicit fallback for installations without
+      // a Picovoice credential. It is not reported as a real wake-word engine.
+      this.mode = 'fallback-rms';
+      logger.info('[WakeWordDetector] Wake-word provider unavailable; using RMS fallback', {
+        reason: !accessKey ? 'no Picovoice access key' : !PorcupineClass ? 'Porcupine module unavailable' : 'unknown',
+      });
     } else {
-      const reason = !accessKey
-        ? 'no PICOVOICE_ACCESS_KEY'
-        : !keywordPath
-          ? 'no keyword file found'
-          : '@picovoice/porcupine-node not available';
-      logger.info('[WakeWordDetector] Initialized', { mode: this.mode, reason });
+      this.mode = 'unavailable';
+      logger.warn('[WakeWordDetector] No wake-word keyword model is packaged');
     }
   }
 
@@ -95,6 +104,8 @@ export class WakeWordDetector extends EventEmitter {
       }
       return;
     }
+
+    if (this.mode !== 'fallback-rms') return;
 
     const computeRms = (samples: Int16Array): number => {
       let sum = 0;
@@ -156,7 +167,11 @@ export class WakeWordDetector extends EventEmitter {
   }
 
   isReady(): boolean {
-    return true;
+    return this.mode !== 'unavailable';
+  }
+
+  getMode(): string {
+    return this.mode;
   }
 }
 
