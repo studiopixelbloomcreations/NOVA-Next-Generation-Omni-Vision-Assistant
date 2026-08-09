@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import { ToolRegistry } from './tool_registry';
 import { ToolExecutor } from './tool_executor';
 import { ToolForge, ForgeResult } from './tool_forge';
-import { ToolDefinition } from './tool_types';
+import { ToolDefinition, ToolExecutionResult } from './tool_types';
 import { aiProviderRegistry, AiProvider } from './ai_provider';
 import { logger } from '../core/logger';
 import { NovaConfig } from '../core/config';
@@ -252,14 +252,15 @@ export class AutonomousExecutionEngine extends EventEmitter {
     return { objective: String(parsed.objective ?? request), steps };
   }
 
-  private async ensureTool(step: AgentPlanStep): Promise<ToolDefinition> {
+  private async ensureTool(step: AgentPlanStep): Promise<{ tool: ToolDefinition; execution?: ToolExecutionResult }> {
     const existing = step.tool ? (this.registry.get(step.tool) ?? this.registry.getByName(step.tool)) : this.registry.findCapability(step.capability);
-    if (existing) return existing;
+    if (existing) return { tool: existing };
     this.emitProgress(`Creating capability: ${step.capability}`, 'active');
     const forgeResult: ForgeResult = await this.forge.forgeTool(step.capability);
     if (!forgeResult.productionOk) throw new Error(`Forged tool '${forgeResult.tool.name}' failed its production execution`);
     this.emitProgress(`Capability online: ${forgeResult.tool.name}`, 'completed');
-    return forgeResult.tool;
+    const execution = forgeResult.execution as ToolExecutionResult | null | undefined;
+    return { tool: forgeResult.tool, execution: execution && typeof execution === 'object' && 'success' in execution ? execution : undefined };
   }
 
   async run(request: string): Promise<AutonomousTrace> {
@@ -283,9 +284,10 @@ export class AutonomousExecutionEngine extends EventEmitter {
       for (let attempt = 1; attempt <= MAX_RETRIES_PER_STEP; attempt++) {
         try {
           this.emitProgress(`${step.goal} — attempt ${attempt}`, 'active');
-          const tool = await this.ensureTool(step);
+          const ensured = await this.ensureTool(step);
+          const tool = ensured.tool;
           const args = { ...step.args, query: step.args.query ?? request };
-          const execution = await this.executor.executeDefinition(tool, args);
+          const execution = ensured.execution ?? await this.executor.executeDefinition(tool, args);
           if (!execution.success) throw new Error(execution.error ?? 'tool execution failed');
           const verification = await this.verification.modelVerify(request, step, execution.payload);
           final = { step, tool, success: verification.passed, payload: execution.payload, error: verification.passed ? null : verification.detail, attempts: attempt, verification };
