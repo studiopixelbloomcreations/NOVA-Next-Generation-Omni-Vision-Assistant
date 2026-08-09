@@ -57,7 +57,7 @@ export class GeminiLiveBridge extends EventEmitter {
   /**
    * Builds the Gemini Live session setup frame. Public so the voice/persona
    * configuration can be verified in tests without a live socket: the frame
-   * must carry Gacrux and the Personality Engine system instruction.
+   * must carry Charon and the Personality Engine system instruction.
    */
   public buildSetupMessage(): Record<string, unknown> {
     const setup: Record<string, unknown> = {
@@ -145,7 +145,7 @@ export class GeminiLiveBridge extends EventEmitter {
       this.connected = true;
       this.setConnectionState('CONNECTED');
 
-      // The session frame comes from ONE builder: canonical voice (Gacrux via
+      // The session frame comes from ONE builder: canonical voice (Charon via
       // NovaConfig) + the Personality Engine system instruction.
       const setupMessage = this.buildSetupMessage();
 

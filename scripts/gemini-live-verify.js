@@ -4,7 +4,7 @@
 //
 // Establishes an actual BidiGenerateContent WebSocket session through the
 // production GeminiLiveBridge, verifies:
-//   1. the exact setup frame the bridge sends requests the Gacrux voice and
+//   1. the exact setup frame the bridge sends requests the Charon voice and
 //      carries the Personality Engine system instruction ("Sir", persona)
 //   2. the live session connects and reaches setup-complete
 //   3. a real text turn receives a real model response (transcript tokens +
@@ -74,7 +74,7 @@ async function main() {
     console.log('[verify] SETUP-COMPLETE — real session ready');
     // Real turn: ask the model to SPEAK so the Native Audio output path
     // (server -> bridge -> ai-audio-chunk -> renderer playback) is exercised.
-    bridge.sendTextMessage('Say the words GACRUX OK out loud and then stop. Do not write extra text.');
+    bridge.sendTextMessage('Say the words CHARON OK out loud and then stop. Do not write extra text.');
   });
   bridge.on('user-text-transcribed', (t) => console.log(`[verify] user transcript: ${redact(t)}`));
   bridge.on('ai-text-token', (t) => {

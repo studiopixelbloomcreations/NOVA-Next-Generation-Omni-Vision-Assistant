@@ -11,7 +11,7 @@
 //          -> Register Tool -> Load Tool -> Execute Task -> Log Results -> Update Registry
 //
 // The builder is provider-agnostic: code generation goes through the
-// AiProviderRegistry, so Grok, Gemini, or any future coding model can be
+// AiProviderRegistry, so Groq, Gemini, or any future coding model can be
 // selected without touching this module.
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';

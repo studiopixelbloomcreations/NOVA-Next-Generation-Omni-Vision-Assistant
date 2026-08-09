@@ -13,8 +13,6 @@ export { PiiSanitizer } from '../services/pii_sanitizer';
 export const SECRET_ENV_KEYS: ReadonlySet<string> = new Set([
   'GEMINI_API_KEY',
   'GROQ_API_KEY',
-  'GROK_API_KEY',
-  'XAI_API_KEY',
   'PICOVOICE_ACCESS_KEY',
   'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',

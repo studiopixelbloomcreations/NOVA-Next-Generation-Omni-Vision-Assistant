@@ -363,6 +363,10 @@ async function main() {
   await test('provider registry lists all providers', () => {
     const ids = aiProviderRegistry.all().map(p => p.id);
     assert(ids.includes('gemini') && ids.includes('groq'), 'gemini + groq registered');
+    aiProviderRegistry.configureSecrets({
+      gemini: process.env.GEMINI_API_KEY ?? '',
+      groq: process.env.GROQ_API_KEY ?? '',
+    });
     const primary = aiProviderRegistry.primary();
     if (process.env.GEMINI_API_KEY || process.env.GROQ_API_KEY) {
       assert(primary !== null, 'a configured provider is primary');
@@ -912,7 +916,7 @@ async function main() {
     fs.rmSync(dir, { recursive: true, force: true });
   });
 
-  console.log('\n[voice_gacrux]');
+  console.log('\n[voice_charon]');
   const { NovaConfig } = require(path.join(dist, '..', 'core', 'config.js'));
   const { GeminiLiveBridge } = require(path.join(dist, 'gemini_live_bridge.js'));
   await test('canonical voice is configured and reaches the actual session setup frame', () => {

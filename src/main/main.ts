@@ -735,7 +735,7 @@ app.whenReady().then(async () => {
     aiProviderRegistry.get('groq')?.isConfigured() ? '' : 'GROQ_API_KEY not configured',
   );
   if (!aiProviderRegistry.get('groq')?.isConfigured()) {
-    runtimeState.log('info', 'Grok/Groq provider is unconfigured — reasoning falls back to Gemini.');
+    runtimeState.log('warn', 'Groq provider is unconfigured — reasoning and tool synthesis are unavailable until GROQ_API_KEY is configured.');
   }
 
   // Probe the real Python runtime (worker starts lazily on first use).

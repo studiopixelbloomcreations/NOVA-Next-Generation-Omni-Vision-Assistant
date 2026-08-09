@@ -16,7 +16,7 @@ ws.on('open', () => {
       model: 'models/gemini-2.5-flash-native-audio-preview-12-2025',
       generationConfig: {
         responseModalities: ['AUDIO'],
-        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Gacrux' } } },
+        speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Charon' } } },
       },
       systemInstruction: { parts: [{ text: 'You are NOVA. Reply briefly.' }] },
       inputAudioTranscription: {},
