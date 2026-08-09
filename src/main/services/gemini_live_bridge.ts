@@ -196,7 +196,11 @@ export class GeminiLiveBridge extends EventEmitter {
         const inputText: string | undefined = serverContent?.inputTranscription?.text;
         if (inputText) {
           this.pendingUserTranscript += inputText;
-          this.emit('user-text-transcribed', inputText);
+          // Gemini sends deltas. Emit the cumulative phrase because the
+          // renderer intentionally replaces the single live USER row on each
+          // partial update; emitting only the latest delta made transcription
+          // look frozen or reduced it to the last fragment.
+          this.emit('user-text-transcribed', this.pendingUserTranscript);
         }
 
         const outputText: string | undefined = serverContent?.outputTranscription?.text;
