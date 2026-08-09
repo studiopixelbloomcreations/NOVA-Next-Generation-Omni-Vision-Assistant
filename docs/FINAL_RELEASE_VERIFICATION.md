@@ -3,13 +3,21 @@
 Date: 2026-08-09  
 Repository: https://github.com/studiopixelbloomcreations/NOVA-Next-Generation-Omni-Vision-Assistant  
 Release: `1.1.0`  
-Source commit verified: `c9ad89d` (`fix: complete AI forge parsing and reject fake stream tools`)
+Source commits verified: `fc90b35` (`fix: prefer packaged python runtime in installed app`) and its parent `959eed1` (`fix: reduce voice latency and stabilize whisper fallback`)
 
 ## Release result
 
 The final blocker fixes are implemented and verified. The real AI Tool Forge path now accepts the model's generated design, audits it, runs its sandbox tests, registers it, and executes it on Windows. The previous fake-success stream fallback was removed: failed media generation now reports an error instead of fabricating a working tool.
 
 The rebuilt portable executable and NSIS installer both passed launch checks, and the NSIS installer was installed successfully at `C:\Users\thenu\AppData\Local\Programs\Nova Genesis`.
+
+## Voice latency follow-up
+
+- Fixed the concurrent Python-worker startup race that caused `python worker stopped` and Whisper fallback errors.
+- Packaged runtime resolution now prefers the installed app's bundled `resources\\app\\python`, so launching from the repository directory cannot accidentally select the development Python tree.
+- Gemini Live input transcription is now the active low-latency display and command stream while connected; local Whisper remains warmed and available as the fallback path.
+- Reduced local partial buffering from 320 ms to 200 ms and reduced end-of-speech hold from 800 ms to 300 ms.
+- Fresh installed-app log verification: Python worker started once and reported `Local Whisper ready`.
 
 ## Verification scorecard
 
