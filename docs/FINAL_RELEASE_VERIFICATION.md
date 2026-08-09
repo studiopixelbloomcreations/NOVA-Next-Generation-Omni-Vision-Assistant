@@ -3,7 +3,7 @@
 Date: 2026-08-09  
 Repository: https://github.com/studiopixelbloomcreations/NOVA-Next-Generation-Omni-Vision-Assistant  
 Release: `1.1.0`  
-Source commits verified: `fc90b35` (`fix: prefer packaged python runtime in installed app`) and its parent `959eed1` (`fix: reduce voice latency and stabilize whisper fallback`)
+Source commits verified: `4a41944` (`fix: render cumulative live speech transcript`), `fc90b35` (`fix: prefer packaged python runtime in installed app`), and `959eed1` (`fix: reduce voice latency and stabilize whisper fallback`)
 
 ## Release result
 
@@ -17,6 +17,7 @@ The rebuilt portable executable and NSIS installer both passed launch checks, an
 - Packaged runtime resolution now prefers the installed app's bundled `resources\\app\\python`, so launching from the repository directory cannot accidentally select the development Python tree.
 - Gemini Live input transcription is now the active low-latency display and command stream while connected; local Whisper remains warmed and available as the fallback path.
 - Reduced local partial buffering from 320 ms to 200 ms and reduced end-of-speech hold from 800 ms to 300 ms.
+- Gemini transcript deltas are accumulated before IPC delivery, so the renderer receives the complete live phrase on every partial update.
 - Fresh installed-app log verification: Python worker started once and reported `Local Whisper ready`.
 
 ## Verification scorecard
