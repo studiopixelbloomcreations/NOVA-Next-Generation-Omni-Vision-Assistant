@@ -16,8 +16,12 @@ export const NovaConfig = {
     codegenModel: process.env.NOVA_CODEGEN_MODEL || 'models/gemini-2.5-pro',
     // Canonical Gemini Live Native Audio voice. Keep this as the single runtime default.
     liveVoice: process.env.NOVA_LIVE_VOICE || 'Charon',
-    providerPriority: (process.env.NOVA_PROVIDER_PRIORITY || 'gemini,grok').split(',').map(s => s.trim()).filter(Boolean),
+    // Gemini is the conversational head; Groq is the reasoning/engineering head.
+    // Provider IDs are deliberately independent of model/vendor branding so the
+    // orchestration layer can be swapped without changing task semantics.
+    providerPriority: (process.env.NOVA_PROVIDER_PRIORITY || 'gemini,groq').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
     requestTimeoutMs: intFromEnv('NOVA_AI_TIMEOUT_MS', 30000),
+    groqModel: process.env.NOVA_GROQ_MODEL || 'llama-3.3-70b-versatile',
   },
   tooling: {
     sandboxMemoryMb: intFromEnv('NOVA_SANDBOX_MEMORY_MB', 64),
