@@ -1,0 +1,5 @@
+node_modules/
+dist/
+dist-cjs/
+.nova2-data/
+*.log

@@ -1,3 +1,13 @@
+// ============================================================================
+// LEGACY — DISABLED
+// ============================================================================
+// This file is the OLD NOVA backend main process. It is RETAINED in the
+// repository for reference and archived rollback, but it is DISABLED: it is no
+// longer the Electron entry point. The ACTIVE entry is `nova2_main.ts`, which
+// boots only the New Backend (`New Backend/`) through the existing IPC
+// contract, leaving the frontend unchanged. Do not add new logic here. See
+// docs/NEW_BACKEND_ARCHITECTURE.md for the active architecture.
+// ============================================================================
 import 'dotenv/config';
 import { app, BrowserWindow, ipcMain, screen, desktopCapturer, Tray, Menu, nativeImage } from 'electron';
 import { join } from 'path';

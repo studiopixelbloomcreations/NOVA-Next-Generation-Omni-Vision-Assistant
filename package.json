@@ -3,19 +3,20 @@
   "version": "1.1.0",
   "description": "NOVA Genesis Personal Operating Intelligence System",
   "author": "NOVA Genesis Team",
-  "main": "dist/main/main.js",
+  "main": "dist/main/nova2_main.js",
   "engines": {
     "node": ">=18.17",
     "electron": ">=28"
   },
   "scripts": {
-    "dev": "tsc -p tsconfig.main.json && vite build && electron .",
-    "build": "tsc -p tsconfig.main.json && vite build --config vite.config.mts",
+    "build:nova2": "cd \"New Backend\" && npm run build:cjs",
+    "dev": "npm run build:nova2 && tsc -p tsconfig.main.json && vite build && electron .",
+    "build": "npm run build:nova2 && tsc -p tsconfig.main.json && vite build --config vite.config.mts",
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc --noEmit -p tsconfig.json",
     "lint": "eslint --no-config-lookup scripts --ext .js",
     "test": "npm run build && node scripts/run-tests.js",
     "test:unit": "node scripts/run-tests.js",
-    "electron:start": "tsc -p tsconfig.main.json && electron .",
+    "electron:start": "npm run build:nova2 && tsc -p tsconfig.main.json && electron .",
     "electron:package": "npm run build && electron-builder --publish=never",
     "rebuild-native": "npx electron-rebuild -f --only better-sqlite3,isolated-vm,@picovoice/porcupine-node,@ricky0123/vad-node,onnxruntime-node",
     "rebuild-native-partial": "npx electron-rebuild -f --only better-sqlite3,@picovoice/porcupine-node,@ricky0123/vad-node,onnxruntime-node",
@@ -35,6 +36,8 @@
       "native_modules/**/*",
       "build/icon.png",
       "python/**/*",
+      "New Backend/dist-cjs/**/*",
+      "New Backend/python_runtime/**/*",
       "package.json"
     ],
     "extraResources": [

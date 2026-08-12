@@ -1,0 +1,28 @@
+{
+  "name": "nova-genesis-new-backend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NOVA Genesis — New Backend (autonomous desktop AI core). Standalone modular engine architecture.",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json && node scripts/write_cjs_pkg.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "npm run build && node --test dist/tests/",
+    "test:unit": "npm run build && node --test dist/tests/unit/",
+    "test:integration": "npm run build && node --test dist/tests/integration/",
+    "forge:e2e": "npm run build && node --test dist/tests/integration/forge.e2e.test.js",
+    "start": "node dist/index.js",
+    "demo": "npm run build && node scripts/demo.mjs"
+  },
+  "engines": {
+    "node": ">=18.17"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.4"
+  },
+  "dependencies": {
+    "@types/node": "^20.19.43"
+  }
+}
