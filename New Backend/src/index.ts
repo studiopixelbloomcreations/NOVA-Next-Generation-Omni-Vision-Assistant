@@ -18,6 +18,11 @@ import { TelemetryEngine } from './telemetry/TelemetryEngine.js';
 import { EnvironmentEngine } from './environment/EnvironmentEngine.js';
 import { WorkspaceEngine } from './workspace/WorkspaceEngine.js';
 import { VoiceEngine } from './voice/VoiceEngine.js';
+import { WakeWordDetector } from './voice/WakeWordDetector.js';
+import { MicCapture } from './voice/MicCapture.js';
+import { WhisperTranscriber } from './voice/WhisperTranscriber.js';
+import { GeminiLiveBridge } from './voice/GeminiLiveBridge.js';
+import { CharonTTS } from './voice/CharonTTS.js';
 import { GroqProvider } from './providers/GroqProvider.js';
 import { GeminiProvider } from './providers/GeminiProvider.js';
 import { ProviderRegistry } from './providers/ProviderRegistry.js';
@@ -37,7 +42,10 @@ import { MaintenanceEngine } from './maintenance/MaintenanceEngine.js';
 import { SelfRepairEngine } from './maintenance/SelfRepairEngine.js';
 import { LearningEngine } from './maintenance/LearningEngine.js';
 import { UpgradeEngine } from './upgrades/UpgradeEngine.js';
-import { registerBuiltins } from './tools/BuiltinTools.js';
+import { TrialManager } from './upgrades/TrialManager.js';
+import { SelfMaintenanceCoordinator } from './maintenance/SelfMaintenanceCoordinator.js';
+import { DiagnosticsEngine } from './diagnostics/DiagnosticsEngine.js';
+import { registerBuiltins, registerBuiltinCapabilities } from './tools/BuiltinTools.js';
 import { registerStandardVerifiers } from './verification/VerificationEngine.js';
 import { InputEngine } from './input/InputEngine.js';
 import { Identity } from './contracts/identity.js';
@@ -76,8 +84,17 @@ export class NovaBackend {
   readonly personality: PersonalityEngine;
   readonly output: OutputEngine;
   readonly subagents: AgentOrchestrator;
+  readonly wakeDetector: WakeWordDetector;
+  readonly mic: MicCapture;
+  readonly whisper: WhisperTranscriber;
+  readonly liveBridge: GeminiLiveBridge;
+  readonly charon: CharonTTS;
+  readonly maintenanceCoordinator: SelfMaintenanceCoordinator;
+  readonly trialManager: TrialManager;
+  readonly diagnostics: DiagnosticsEngine;
   agent: NovaAgent | null = null;
   private ready = false;
+  private closeHandler: (() => void) | null = null;
 
   constructor(options: NovaBackendOptions = {}) {
     if (!options.silent) logger.configure(options.logLevel ?? 'info', createConsoleSink());
@@ -93,7 +110,17 @@ export class NovaBackend {
     this.telemetry = new TelemetryEngine(ud);
     this.environment = new EnvironmentEngine();
     this.workspace = new WorkspaceEngine(ud);
-    this.voice = new VoiceEngine(Nova2Config.voice.wakeWord);
+    // Voice subsystem (System 29): wake word ADAM, mic, Whisper, Gemini Live, Charon.
+    this.wakeDetector = new WakeWordDetector();
+    this.mic = new MicCapture();
+    this.whisper = new WhisperTranscriber(this.bridge);
+    this.liveBridge = new GeminiLiveBridge();
+    this.liveBridge.on('error', (err: Error) => {
+      this.errors?.capture({ subsystem: 'gemini_live', message: err?.message ?? String(err) }, err);
+      logger.warn('[backend] Gemini Live error', { error: err?.message ?? String(err) });
+    });
+    this.charon = new CharonTTS(this.bridge);
+    this.voice = new VoiceEngine(this.wakeDetector, this.mic, this.whisper, this.liveBridge, this.charon);
     this.providers = new ProviderRegistry();
     this.selector = new AgentSelector(this.providers);
     this.lifecycle = new LifecycleEngine();
@@ -110,6 +137,13 @@ export class NovaBackend {
     this.learning = new LearningEngine(this.memory);
     this.upgrades = new UpgradeEngine(ud);
     this.subagents = new AgentOrchestrator(this.selector);
+    this.maintenanceCoordinator = new SelfMaintenanceCoordinator(this.library, this.selfRepair);
+    this.trialManager = new TrialManager(this.upgrades, this.health);
+    this.diagnostics = new DiagnosticsEngine(this.health, this.errors, this.library, this.providers, this.bridge);
+    // Auto-respond to maintenance findings by staging validated repairs (System 18).
+    this.maintenance.on('finding', (f) => {
+      void this.maintenanceCoordinator.handleFinding(f as never).catch(() => undefined);
+    });
   }
 
   private initProviders(): void {
@@ -119,6 +153,9 @@ export class NovaBackend {
     gemini.configure(this.secrets.get('GEMINI_API_KEY'));
     this.providers.register(groq);
     this.providers.register(gemini);
+    // Gemini Live conversational head.
+    this.liveBridge.configure(this.secrets.get('GEMINI_API_KEY'));
+    this.providers.startAutoRefresh(30_000);
   }
 
   private initAgent(): void {
@@ -136,13 +173,26 @@ export class NovaBackend {
       this.stateMachine,
       this.learning,
       this.errors,
+      this.subagents,
+      this.diagnostics,
     );
-    // Register audited built-in handlers onto the agent's execution engine.
+    // Register audited built-in handlers onto the agent's execution engine and
+    // expose them to capability discovery as system tools.
     registerBuiltins(this.agent.engines.executor, { bridge: this.bridge, workspace: this.workspace });
+    registerBuiltinCapabilities(this.library);
     registerStandardVerifiers(this.agent.engines.verification, this.library);
+    // Feed the Gemini Live head the current tool declarations so it can call
+    // back into A.D.A.M. capabilities.
+    this.liveBridge.setToolDeclarations(this.agent.buildToolDeclarations());
+    // Wire self-close (System 30) to the host shutdown path.
+    this.agent.on('close-request', () => {
+      this.closeHandler?.();
+    });
     // Continuous self-monitoring + upgrade engines run while the app is open.
     this.maintenance.start();
     this.upgrades.start();
+    // Always-on voice loop.
+    this.voice.start();
   }
 
   /** Start the backend following the lifecycle order. Returns true when READY. */
@@ -154,7 +204,10 @@ export class NovaBackend {
       memory: () => { /* memory engine already constructed */ },
       environment: () => { /* environment engine already constructed */ },
       providers: () => { this.initProviders(); },
-      voice: () => { /* voice engine constructed */ },
+      voice: () => {
+        this.voice.start();
+        this.connectLive();
+      },
       capability: () => { /* discovery engine available via agent */ },
       orchestrator: () => { this.initAgent(); },
     });
@@ -174,11 +227,14 @@ export class NovaBackend {
   async handleRequest(text: string, source: RequestSource = 'typed'): Promise<ReturnType<NovaAgent['run']>> {
     if (!this.agent) throw new Error(`${Identity.name} backend is not initialized. Call start() first.`);
     if (this.stateMachine.isBusy()) this.stateMachine.transition('UNDERSTANDING');
+    this.maintenance.pause(); // defer maintenance during a critical user operation
     const envelope = this.input.normalize(text, source, { wakeWordDetected: source === 'whisper' });
     const result = await this.agent.run(envelope);
+    this.maintenance.resume();
     // Learn from the task and present through the coherent Output + Personality
     // layer so the user experiences a single cohesive assistant.
     this.learning.learnFromTask(result.entry);
+    this.liveBridge.setToolDeclarations(this.agent.buildToolDeclarations());
     if (result.status === 'completed') this.stateMachine.resetToIdle();
     return result;
   }
@@ -192,6 +248,55 @@ export class NovaBackend {
   async handleEnvelope(envelope: RequestEnvelope): Promise<ReturnType<NovaAgent['run']>> {
     if (!this.agent) throw new Error('NOVA backend is not initialized.');
     return this.agent.run(envelope);
+  }
+
+  /** Register the host callback invoked on a self-close request (System 30). */
+  onCloseRequested(handler: () => void): void {
+    this.closeHandler = handler;
+  }
+
+  // --- Voice-facing API (System 29) ---
+
+  /** Feed a PCM frame (16kHz mono) into wake detection + Whisper. */
+  processAudioFrame(pcm: Int16Array | number[]): void {
+    this.voice.processAudioFrame(pcm);
+  }
+
+  /** Speak a response in the Charon voice. */
+  async speak(text: string): Promise<boolean> {
+    return this.voice.speak(text);
+  }
+
+  /** Connect the Gemini Live conversational head (called after providers init). */
+  connectLive(): void {
+    if (this.liveBridge.isConnected()) return;
+    void this.liveBridge.connectStream();
+  }
+
+  disconnectLive(): void {
+    this.liveBridge.disconnectStream();
+  }
+
+  // --- Self-management / diagnostics API ---
+
+  async diagnosticsReport(): Promise<ReturnType<DiagnosticsEngine['collect']>> {
+    return this.diagnostics.collect();
+  }
+
+  maintenanceFindings(): unknown[] {
+    return this.maintenance.findingsList();
+  }
+
+  readyUpgradeProposals(): unknown[] {
+    return this.upgrades.readyUpgrades();
+  }
+
+  startUpgradeTrial(id: string): boolean {
+    return this.trialManager.startTrial(id);
+  }
+
+  acceptUpgradeTrial(): void {
+    this.trialManager.accept();
   }
 
   // --- Frontend-facing queries (used by the Electron adapter) ---
@@ -251,11 +356,17 @@ export class NovaBackend {
         this.maintenance.stop();
         this.upgrades.stop();
         this.subagents.disposeAll();
+        this.trialManager.abort();
         this.agent = null;
       },
       capability: () => {},
-      voice: () => {},
-      providers: () => {},
+      voice: () => {
+        this.voice.stop();
+        this.disconnectLive();
+      },
+      providers: () => {
+        this.providers.stopAutoRefresh();
+      },
       environment: () => {},
       memory: () => this.memory.flush(),
       tools: () => this.library.flush(),

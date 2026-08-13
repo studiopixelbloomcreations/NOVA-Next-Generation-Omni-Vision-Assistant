@@ -420,7 +420,15 @@ systems that start with the backend and stop cleanly on close:
 | **Upgrade** | `upgrades/UpgradeEngine.ts` | Propose→build isolated candidate in `staging/upgrades/<id>`→validate→UPGRADE READY→user trial→automatic rollback on failure. |
 | **Learning** | `maintenance/LearningEngine.ts` | Records successful/failed strategies and recalls relevant lessons on future requests. |
 | **Subagents** | `orchestration/AgentOrchestrator.ts` | Scoped, bounded, disposable specialist subagents (architecture/python/security/provider/qa) with aggregated conclusions. |
-| **Model matrix** | `providers/ProviderRegistry.ts` | Dynamic model capability matrix (reasoning/coding/speed/reliability/context), refreshed periodically; strongest-for-role selection. |
+| **Model matrix** | `providers/ProviderRegistry.ts` | Dynamic model capability matrix (reasoning/coding/speed/reliability/context), refreshed on a periodic timer; strongest-for-role selection. |
+| **Wake word / voice I/O** | `voice/WakeWordDetector.ts`, `voice/MicCapture.ts`, `voice/WhisperTranscriber.ts`, `voice/GeminiLiveBridge.ts`, `voice/CharonTTS.ts` | Real voice subsystem: PCM wake-word detection (ADAM), mic lifecycle, streaming Whisper transcription, a real WebSocket Gemini Live bridge with tool calls + barge-in, and Charon TTS via Windows SAPI/pyttsx3. |
+| **Windows automation** | `python_runtime/nova_runtime/win.py` + `tools/BuiltinTools.ts` | Real Win32 operations (active window, app launch, processes, screenshot, clipboard, keyboard/mouse) exposed as builtin capabilities for discovery/execution. |
+| **Closed self-repair loop** | `maintenance/SelfMaintenanceCoordinator.ts` | Auto-handles maintenance findings for broken tools: diagnose → patch via coding agent → validate → sandbox → stage (never unvalidated production writes). |
+| **Upgrade trial + rollback** | `upgrades/TrialManager.ts` | Explicit user trial of a validated upgrade with live health monitoring and AUTOMATIC rollback on degradation. |
+| **Diagnostics** | `diagnostics/DiagnosticsEngine.ts` | On-demand structured state report (health, providers, tools, task queue, memory, errors). |
+| **Self-close** | `orchestration/NovaAgent.ts` + facade | "ADAM, close yourself" triggers the clean System-30 shutdown path (ack → stop maintenance/upgrades/providers/Python → persist → flush → exit). |
+| **Performance deferral** | `maintenance/MaintenanceEngine.ts` | Maintenance/upgrade scans are paused during critical user operations (System 35). |
+| **Builtin capability library** | `tools/BuiltinTools.ts` | Audited host capabilities registered as discovery-able system tools (foundation infrastructure only — task capabilities are never hardcoded). |
 
 **Safety invariants (Systems 36):** Maintenance and Upgrade engines never
 overwrite production, never install dependencies without validation, never

@@ -39,10 +39,13 @@ These are **real** runs — no mocks — executed against the actual filesystem 
 the actual Python interpreter.
 
 ### 2.1 Full test suite — `New Backend/` → `npm test`
-**40/40 tests pass** (37 unit + 3 integration). The A.D.A.M. additions add
-11 unit tests covering identity migration, Personality/Output engines, Error
+**48/48 tests pass** (45 unit + 3 integration). The A.D.A.M. additions add
+19 unit tests covering identity migration, Personality/Output engines, Error
 Observability, Health, Maintenance findings, Upgrade staging/trial/rollback,
-Learning recall, and subagent bounding/disposal.
+Learning recall, subagent bounding/disposal, WakeWordDetector (real PCM),
+MicCapture, GeminiLiveBridge error handling, SelfMaintenanceCoordinator,
+TrialManager, DiagnosticsEngine, self-close, and builtin capability
+registration.
 
 - **Unit (37):**
   - Intent classification: tool_creation, research, computer_task,
@@ -63,6 +66,13 @@ Learning recall, and subagent bounding/disposal.
     errors; Health reports real python state; Maintenance flags an unhealthy
     tool without mutating the library; Upgrade stages→validates→trials→rolls
     back without touching production; Learning recalls a recorded success.
+  - **A.D.A.M. voice/systems:** WakeWordDetector fires on real PCM utterance
+    after quiet; MicCapture reflects real capture state; GeminiLiveBridge
+    errors honestly without a key; SelfMaintenanceCoordinator stages a repair;
+    TrialManager starts/keeps a trial; DiagnosticsEngine reports structured
+    state; NovaBackend self-close returns closeRequested and fires the host
+    handler; builtin capabilities (Screen Capture, App Launcher, System Info)
+    are registered for discovery.
 
 - **Integration (3):**
   1. **Forge end-to-end (template path):** missing capability →

@@ -25,9 +25,28 @@ npm run build:cjs  # CommonJS -> dist-cjs/ (consumed by the Electron main)
 
 - `src/` — the backend source (contracts, engines, orchestration, facade).
 - `python_runtime/nova_runtime/` — Python sandbox, tool runner, AST validator,
-  host & directory services (stdlib only).
+  host & directory services, **Windows automation (`win.py`)**, **microphone/
+  Whisper (`audio.py`)**, and **Charon TTS (`tts.py`)**.
+- `src/voice/` — wake word ADAM, mic lifecycle, Whisper streaming, Gemini Live
+  bridge, Charon TTS, and the always-on VoiceEngine.
+- `src/maintenance/` — Health, Error Observability, Maintenance, Self-Repair,
+  Self-Maintenance Coordinator, Learning.
+- `src/upgrades/` — Upgrade engine + Trial manager (auto-rollback).
+- `src/diagnostics/` — Diagnostics engine.
 - `src/tests/` — unit + integration tests (real pipelines).
 - `scripts/demo.mjs` — CLI end-to-end demo.
+
+## A.D.A.M. identity
+
+Runtime AI identity is **A.D.A.M.** (wake word **ADAM**, voice **Charon**).
+Prompts and personality derive from `src/contracts/identity.ts`. The repo name
+and file paths keep historical NOVA references by design.
+
+## Verification
+
+See `../docs/CODEX_VERIFICATION_HANDOFF.md` for the independent Codex
+verification protocol, and `../docs/ADAM_OMEGA_IMPLEMENTATION_REPORT.md` for
+what is implemented vs. what requires a live Windows host.
 
 ## Entry points
 

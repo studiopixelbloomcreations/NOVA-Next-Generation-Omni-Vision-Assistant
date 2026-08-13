@@ -59,6 +59,24 @@ export function wireElectron(backend: NovaBackend): string[] {
 
   if (backend.agent) backend.agent.on('activity', (a: { level: string; message: string }) => pushActivity(a.level, a.message));
   backend.lifecycle.on('step', () => pushState());
+  // Push A.D.A.M. state-machine transitions so the existing UI stays live.
+  backend.stateMachine.on('change', () => pushState());
+  // Push voice state changes to the existing voice surface.
+  backend.voice.on('state-change', (snap: { currentState: string; listening: boolean }) => {
+    broadcast(electron, NovaIpcChannel.VOICE_STATE_CHANGE, {
+      currentState: snap.currentState,
+      inputAmplitude: 0,
+      streamLatencyMs: 0,
+      detectedSpeakerId: undefined,
+    });
+  });
+  backend.voice.on('transcript-final', (text: string) => {
+    broadcast(electron, NovaIpcChannel.SPEECH_TEXT_TRANSCRIBED, { text, partial: false });
+  });
+  // Present A.D.A.M.'s spoken text through the existing AI text channel too.
+  backend.voice.on('event', (e: string) => {
+    if (e === 'speech') pushActivity('info', 'Voice input active');
+  });
 
   // --- Existing frontend invoke channels (identical names, no UI change) ---
   const handle = (channel: string, fn: (...args: unknown[]) => Promise<unknown> | unknown): void => {
@@ -110,10 +128,28 @@ export function wireElectron(backend: NovaBackend): string[] {
   });
 
   // --- Backward-compatible additions ---
-  handle(NovaIpcChannel.NB_PING, () => ({ pong: true, backend: 'nova2' }));
+  handle(NovaIpcChannel.NB_PING, () => ({ pong: true, backend: 'adam' }));
   handle(NovaIpcChannel.NB_INTENT, async (t: unknown) => (backend.agent ? backend.agent.engines.intent.classifyDeterministic(String(t ?? '')) : null));
   handle(NovaIpcChannel.NB_TELEMETRY, () => backend.telemetry.snapshot());
   handle(NovaIpcChannel.NB_CAPABILITIES, () => backend.listCapabilities());
+  handle(NovaIpcChannel.NB_MEMORY, async (q: unknown, k: unknown) => backend.memory.search(String(q ?? ''), Math.min(Math.max(Number(k) || 5, 1), 20)));
+  handle(NovaIpcChannel.NB_ACTIVITY_STREAM, () => backend.maintenanceFindings());
+  handle(NovaIpcChannel.NB_PLAN, async (t: unknown) => {
+    if (!backend.agent) return null;
+    const env = await backend.environment.observe();
+    const intent = backend.agent.engines.intent.classifyDeterministic(String(t ?? ''));
+    const provider = backend.selector.trySelect('planning');
+    const envelope = backend.input.normalize(String(t ?? ''), 'typed', { environmentSnapshot: env });
+    return backend.agent.engines.planning.plan(envelope, intent, [], provider);
+  });
+
+  // Diagnostics + self-management surface (A.D.A.M. additions).
+  handle('nova2:diagnostics', async () => backend.diagnosticsReport());
+  handle('nova2:maintenance', () => backend.maintenanceFindings());
+  handle('nova2:upgrades', () => backend.readyUpgradeProposals());
+  handle('nova2:upgrade-trial', (_e: unknown, id: unknown) => ({ ok: backend.startUpgradeTrial(String(id ?? '')) }));
+  handle('nova2:upgrade-accept', () => { backend.acceptUpgradeTrial(); return { ok: true }; });
+  handle('nova2:speak', async (_e: unknown, text: unknown) => ({ ok: await backend.speak(String(text ?? '')) }));
 
   logger.info('[electron_adapter] wired New Backend to existing IPC', { channels: registered.length });
   return registered;

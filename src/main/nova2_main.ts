@@ -81,6 +81,12 @@ app.whenReady().then(async () => {
   const { wireElectron } = loadBackend('../../New Backend/dist-cjs/electron_adapter.js');
   const registered = wireElectron(backend);
 
+  // System 30 — when the user says "ADAM, close yourself", shut down cleanly.
+  backend.onCloseRequested(() => {
+    isQuitting = true;
+    void shutdown().finally(() => app.exit(0));
+  });
+
   createWindow();
   console.log(`[nova2] backend ready=${ready} wiredChannels=${registered.length}`);
 

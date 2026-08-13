@@ -62,8 +62,24 @@ export class MaintenanceEngine extends EventEmitter {
     return this.active;
   }
 
-  /** Run one full maintenance scan (no-op while a critical task is active). */
+  private suppressed = false;
+
+  /** Pause maintenance during critical user operations (System 35). */
+  pause(): void {
+    this.suppressed = true;
+  }
+
+  resume(): void {
+    this.suppressed = false;
+  }
+
+  isSuppressed(): boolean {
+    return this.suppressed;
+  }
+
+  /** Run one full maintenance scan (no-op while suppressed / critical task). */
   async runCheck(force = false): Promise<MaintenanceFinding[]> {
+    if (this.suppressed && !force) return [];
     const report = await this.health.check();
     const batch: MaintenanceFinding[] = [];
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import sys
 
-from . import runtool, sandbox, system, fs, validate
+from . import runtool, sandbox, system, fs, validate, win, audio, tts
 
 
 def dispatch(mode: str, params: dict):
@@ -37,6 +37,15 @@ def dispatch(mode: str, params: dict):
         return fs.list_dir(str(params.get("directory", ".")), int(params.get("limit", 200)))
     if mode == "check-syntax":
         return validate.validate_source(str(params.get("source", "")))
+    if mode.startswith("win."):
+        cmd = mode.split(".", 1)[1]
+        return win.dispatch_cmd(cmd, params)
+    if mode.startswith("audio."):
+        cmd = mode.split(".", 1)[1]
+        return audio.dispatch_cmd(cmd, params)
+    if mode.startswith("tts."):
+        cmd = mode.split(".", 1)[1]
+        return tts.dispatch_cmd(cmd, params)
     return {"success": False, "error": f"unknown mode: {mode}"}
 
 

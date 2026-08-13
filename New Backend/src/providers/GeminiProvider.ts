@@ -1,5 +1,5 @@
 // New Backend — providers/GeminiProvider.ts
-// Gemini provider. Gemini Live is NOVA's conversational/audio head; Gemini
+// Gemini provider. Gemini Live is A.D.A.M.'s conversational/audio head; Gemini
 // REST is used as a coding/reasoning fallback when Groq is unavailable.
 import type { AiProvider, GenerateOptions } from './ProviderTypes.js';
 import { Nova2Config } from '../core/config.js';

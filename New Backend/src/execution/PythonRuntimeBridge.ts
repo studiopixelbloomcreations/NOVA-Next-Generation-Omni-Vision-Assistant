@@ -93,6 +93,25 @@ export class PythonRuntimeBridge {
     return this.run('system-info', {}, 10000);
   }
 
+  // -------------------------------------------------------------------------
+  // Windows automation (System 10) + audio / voice (System 29) + Charon TTS
+  // -------------------------------------------------------------------------
+
+  /** Run a `win.*` command (active-window, launch, screenshot, process, clipboard, input). */
+  winCmd<T = unknown>(cmd: string, params: Record<string, unknown> = {}, timeoutMs = 15000): Promise<PythonResult<T>> {
+    return this.run<T>(`win.${cmd}`, params, timeoutMs);
+  }
+
+  /** Run an `audio.*` command (availability, devices, capture, transcribe). */
+  audioCmd<T = unknown>(cmd: string, params: Record<string, unknown> = {}, timeoutMs = 30000): Promise<PythonResult<T>> {
+    return this.run<T>(`audio.${cmd}`, params, timeoutMs);
+  }
+
+  /** Run a `tts.*` command (availability, speak, voices). */
+  ttsCmd<T = unknown>(cmd: string, params: Record<string, unknown> = {}, timeoutMs = 30000): Promise<PythonResult<T>> {
+    return this.run<T>(`tts.${cmd}`, params, timeoutMs);
+  }
+
   /** Directory analysis (largest files). */
   largestFiles(directory: string, n: number): Promise<PythonResult<{ success: boolean; largest?: unknown; error?: string }>> {
     return this.run<{ success: boolean; largest?: unknown; error?: string }>('fs-largest', { directory, n }, 15000);

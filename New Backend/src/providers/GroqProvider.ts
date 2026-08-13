@@ -1,5 +1,5 @@
 // New Backend — providers/GroqProvider.ts
-// Groq reasoning/coding provider. NOVA's intended reasoning/engineering head.
+// Groq reasoning/coding provider. A.D.A.M.'s intended reasoning/engineering head.
 import type { AiProvider, GenerateOptions } from './ProviderTypes.js';
 import { Nova2Config } from '../core/config.js';
 

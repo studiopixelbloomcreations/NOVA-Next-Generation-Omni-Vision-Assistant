@@ -37,6 +37,9 @@ import { logger } from '../core/logger.js';
 import { StateMachine } from '../lifecycle/StateMachine.js';
 import { LearningEngine } from '../maintenance/LearningEngine.js';
 import { ErrorObservabilityEngine } from '../maintenance/ErrorObservabilityEngine.js';
+import { AgentOrchestrator } from './AgentOrchestrator.js';
+import { DiagnosticsEngine } from '../diagnostics/DiagnosticsEngine.js';
+import { Identity } from '../contracts/identity.js';
 
 export interface NovaResult {
   entry: ExecutionLedgerEntry;
@@ -44,7 +47,12 @@ export interface NovaResult {
   summary: string;
   payloads: unknown[];
   reusedTool: boolean;
+  /** Set when the request was a self-close command (System 30). */
+  closeRequested?: boolean;
 }
+
+const SELF_CLOSE_RE =
+  /^\s*(?:adam|a\.d\.a\.m|nova)?\s*[,.]?\s*(?:please\s+)?(?:close|shut down|shutdown|terminate|exit)\s+(?:yourself|the app|the application|the system|)\s*\.?\s*$/i;
 
 export class NovaAgent extends EventEmitter {
   private intentEngine: IntentEngine;
@@ -66,6 +74,8 @@ export class NovaAgent extends EventEmitter {
   private stateMachine: StateMachine;
   private learning: LearningEngine;
   private errorObservability: ErrorObservabilityEngine;
+  private subagents: AgentOrchestrator | null;
+  private diagnostics: DiagnosticsEngine | null;
 
   constructor(
     private readonly library: ToolLibrary,
@@ -80,6 +90,8 @@ export class NovaAgent extends EventEmitter {
     stateMachine?: StateMachine,
     learning?: LearningEngine,
     errorObservability?: ErrorObservabilityEngine,
+    subagents?: AgentOrchestrator,
+    diagnostics?: DiagnosticsEngine,
   ) {
     super();
     this.memory = memory;
@@ -101,6 +113,8 @@ export class NovaAgent extends EventEmitter {
     this.stateMachine = stateMachine ?? new StateMachine();
     this.learning = learning ?? new LearningEngine(memory);
     this.errorObservability = errorObservability ?? new ErrorObservabilityEngine(Nova2Config.paths.userData);
+    this.subagents = subagents ?? null;
+    this.diagnostics = diagnostics ?? null;
   }
 
   get engines() {
@@ -121,6 +135,25 @@ export class NovaAgent extends EventEmitter {
     return this.prompts;
   }
 
+  /** Build Gemini Live function declarations from the current tool library. */
+  buildToolDeclarations(): unknown[] {
+    const fnDecls: Array<Record<string, unknown>> = [];
+    for (const t of this.library.all()) {
+      if (!t.enabled || t.status === 'failed') continue;
+      fnDecls.push({
+        name: t.technicalId,
+        description: t.description,
+        behavior: 'NON_BLOCKING',
+        parameters: {
+          type: 'OBJECT',
+          properties: { query: { type: 'STRING', description: 'Input passed to the tool.' } },
+          required: [],
+        },
+      });
+    }
+    return [{ google_search: {} }, { function_declarations: fnDecls }];
+  }
+
   /**
    * Execute a full turn end-to-end and return a structured result + ledger entry.
    * The ledger guards against duplicate execution of the same requestId.
@@ -128,6 +161,25 @@ export class NovaAgent extends EventEmitter {
   async run(envelope: RequestEnvelope, opts: { skipDuplicateCheck?: boolean } = {}): Promise<NovaResult> {
     const t0 = Date.now();
     this.emit('activity', { level: 'info', message: `Request received: ${envelope.transcript.slice(0, 80)}` });
+
+    // System 30 — self-close command.
+    if (SELF_CLOSE_RE.test(envelope.transcript.trim())) {
+      this.emit('close-request', envelope.transcript);
+      this.emit('activity', { level: 'info', message: 'Self-close requested; initiating clean shutdown.' });
+      const entry: ExecutionLedgerEntry = {
+        id: `close-${Date.now()}`,
+        requestId: envelope.requestId,
+        taskId: `close-${Date.now()}`,
+        executionId: `close-${Date.now()}`,
+        transcript: envelope.transcript,
+        intent: null, plan: null, agentProviderId: null, steps: [],
+        verification: { passed: true, detail: 'clean shutdown' },
+        retries: 0, errors: [], latencyMs: 0, status: 'completed',
+        startedAt: t0, completedAt: Date.now(),
+        summary: `${Identity.name} is shutting down.`,
+      };
+      return { entry, status: 'completed', summary: entry.summary, payloads: [], reusedTool: false, closeRequested: true };
+    }
 
     if (!opts.skipDuplicateCheck && this.ledger.isExecuted(envelope.requestId)) {
       const dup = this.ledger.all().find(e => e.requestId === envelope.requestId);
@@ -173,7 +225,45 @@ export class NovaAgent extends EventEmitter {
       plan = await this.planning.plan(envelope, intent, memory, provider);
       this.telemetry.record('planning', Date.now() - tPlan, true);
 
+      // For complex/hard tasks, dispatch bounded specialist subagents to
+      // sanity-check the plan and surface risks (System 14).
+      if (this.subagents && this.isHardTask(intent.kind, plan)) {
+        this.stateMachine.transition('SELECTING_AGENT');
+        this.emit('activity', { level: 'info', message: 'Dispatching QA subagent for hard task…' });
+        try {
+          const qa = await this.subagents.runSubagent('qa', `Validate this execution plan for: ${envelope.transcript}\n${JSON.stringify(plan.steps)}`, provider);
+          if (qa.conclusion && !qa.conclusion.startsWith('(subagent') && qa.conclusion.startsWith('[qa]') === false) {
+            this.emit('activity', { level: 'info', message: `Subagent note: ${qa.conclusion.slice(0, 120)}` });
+          }
+        } catch {
+          /* subagents are optional and bounded — never block the main loop */
+        }
+      }
+
       // 5) Execute each step with verification + recovery.
+      this.diagnostics?.markTaskStarted();
+      try {
+        for (const step of plan.steps) {
+          const stepResult = await this.executeStep(envelope, step, memory);
+          stepResults.push(stepResult);
+          payloads.push(stepResult.payload);
+          if (!stepResult.success) {
+            errors.push(stepResult.error ?? 'step failed');
+            retries += stepResult.attempts - 1;
+            if (stepResult.attempts > 1) retries += stepResult.attempts - 1;
+            if (stepResult.verification.passed) {
+              status = 'completed';
+            } else {
+              status = stepResults.length > 1 ? 'partial' : 'failed';
+            }
+            break;
+          }
+          if (stepResult.verification.passed) status = 'completed';
+        }
+        if (stepResults.length > 0 && stepResults.every(s => s.success && s.verification.passed)) status = 'completed';
+      } finally {
+        this.diagnostics?.markTaskEnded();
+      }
       for (const step of plan.steps) {
         const stepResult = await this.executeStep(envelope, step, memory);
         stepResults.push(stepResult);
@@ -295,6 +385,13 @@ export class NovaAgent extends EventEmitter {
     }
   }
 
+  /** Heuristic for whether a task is complex enough to warrant subagents. */
+  private isHardTask(kind: string | undefined, plan: { steps: unknown[] } | null): boolean {
+    if (kind === 'engineering_task' || kind === 'multi_step_task' || kind === 'tool_creation') return true;
+    if (plan && plan.steps && plan.steps.length >= 4) return true;
+    return false;
+  }
+
   private async executeStep(envelope: RequestEnvelope, step: StepResult['step'], memory: unknown[]): Promise<StepResult> {
     let attempts = 0;
     let lastError: string | null = null;
@@ -388,6 +485,6 @@ export class NovaAgent extends EventEmitter {
       return `Completed the requested objective${label ? ` (${label})` : ''} — ${verified} verified execution step${verified === 1 ? '' : 's'}.`;
     }
     if (verified > 0) return `Partially completed — ${verified} step${verified === 1 ? '' : 's'} verified, others failed.`;
-    return 'The objective could not be completed. NOVA exhausted its available strategies without fabricating success.';
+    return 'The objective could not be completed. A.D.A.M. exhausted its available strategies without fabricating success.';
   }
 }

@@ -1,7 +1,7 @@
 // New Backend — providers/ProviderTypes.ts
 // Provider-agnostic AI interface. Providers are raw model clients only; all
 // prompt construction lives in the Prompt Engine and all planning in the
-// Planning Engine. NOVA Core is the execution authority — providers never
+// Planning Engine. A.D.A.M. Core is the execution authority — providers never
 // directly own physical actions.
 export interface GenerateOptions {
   timeoutMs?: number;

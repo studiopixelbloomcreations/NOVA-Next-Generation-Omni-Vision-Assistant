@@ -134,4 +134,30 @@ export class ProviderRegistry {
     this.refreshMatrix();
     return this.selectFor(role);
   }
+
+  // ---------------------------------------------------------------------------
+  // Periodic availability refresh (System 15)
+  // ---------------------------------------------------------------------------
+
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
+
+  /** Start a periodic availability refresh so selection tracks reality. */
+  startAutoRefresh(intervalMs = 30_000): void {
+    if (this.refreshTimer) return;
+    this.refreshTimer = setInterval(() => {
+      try {
+        this.refreshMatrix();
+      } catch (err) {
+        logger.warn('[provider_registry] matrix refresh failed', { error: err instanceof Error ? err.message : String(err) });
+      }
+    }, intervalMs);
+    this.refreshTimer.unref?.();
+  }
+
+  stopAutoRefresh(): void {
+    if (this.refreshTimer) {
+      clearInterval(this.refreshTimer);
+      this.refreshTimer = null;
+    }
+  }
 }
