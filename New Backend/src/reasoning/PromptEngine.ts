@@ -5,11 +5,12 @@
 // constraints, output schema, and verification/failure strategies.
 import type { CapabilityMatch, EnvironmentSnapshot, ExecutionPlan, MemoryEntry } from '../contracts/domain.js';
 import { Nova2Config } from '../core/config.js';
+import { Identity } from '../contracts/identity.js';
 
 export class PromptEngine {
   /** Intent classification prompt (AI-assisted, with a deterministic fallback). */
   buildIntentPrompt(request: string, env: EnvironmentSnapshot | null): string {
-    return `You are NOVA's Intent Engine. Classify the following user request into exactly one intent.
+    return `${Identity.systemPersona} You are the Intent Engine. Classify the following user request into exactly one intent.
 Request: "${request}"
 Platform: ${env?.platform ?? 'unknown'}
 Return ONLY JSON: {"kind":"<one of conversational|informational|workspace|computer_task|multi_step_task|engineering_task|tool_creation|system_task|background_task>","label":"<short verb phrase>","action":"<primary action verb>","entities":["<key noun phrases>"],"needsResearch":<bool>,"needsToolCreation":<bool>,"confidence":<0..1>}`;
@@ -17,7 +18,7 @@ Return ONLY JSON: {"kind":"<one of conversational|informational|workspace|comput
 
   /** Planning prompt fed with the capability catalog. */
   buildPlanPrompt(request: string, catalog: string, maxSteps: number): string {
-    return `You are NOVA's autonomous planning engine. You are not the conversational voice; you are the execution planner.
+    return `${Identity.systemPersona} You are the autonomous planning engine. You are not the conversational voice; you are the execution planner.
 USER OBJECTIVE: ${request}
 
 AVAILABLE CAPABILITIES:
@@ -38,7 +39,7 @@ Return ONLY JSON:
     const repairBlock = previousFailure
       ? `\n\nThe previously generated code FAILED its isolated sandbox tests with this output:\n\`\`\`\n${previousFailure.slice(0, 2500)}\n\`\`\`\nAnalyze the failure and generate a corrected version that fixes it. Do not weaken the requested behavior.`
       : '';
-    return `You are NOVA's Tool Forge. Design a REAL, reusable capability for the request: "${capability}".
+    return `${Identity.systemPersona} You are the Tool Forge. Design a REAL, reusable capability for the request: "${capability}".
 
 Do not ask the user follow-up questions. Infer sensible defaults and produce an executable tool now. The tool must implement real functionality — not return an explanation, not echo the input, not be a wrapper that just calls a model again, and not hardcode the answer.
 
@@ -74,7 +75,7 @@ Return ONLY JSON: {"passed":true|false,"detail":"short factual reason"}. Do not 
 
   /** Reasoning prompt for informational/conversational research work. */
   buildReasoningPrompt(request: string, memory: string[], context: string): string {
-    return `You are NOVA's reasoning engine. Answer the user's request precisely and concisely.
+    return `${Identity.systemPersona} Answer the user's request precisely and concisely.
 Relevant memory context:
 ${memory.length ? memory.map(m => `- ${m}`).join('\n') : '(none)'}
 

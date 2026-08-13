@@ -24,11 +24,24 @@ import { ProviderRegistry } from './providers/ProviderRegistry.js';
 import { AgentSelector } from './reasoning/AgentSelector.js';
 import { CapabilityDiscoveryEngine } from './capability/CapabilityDiscoveryEngine.js';
 import { NovaAgent } from './orchestration/NovaAgent.js';
+import { AgentOrchestrator } from './orchestration/AgentOrchestrator.js';
 import { LifecycleEngine } from './lifecycle/LifecycleEngine.js';
+import { StateMachine } from './lifecycle/StateMachine.js';
+import { PersonalityEngine } from './reasoning/PersonalityEngine.js';
+import { OutputEngine } from './reasoning/OutputEngine.js';
+import { HealthEngine } from './maintenance/HealthEngine.js';
+import { ValidationEngine } from './validation/ValidationEngine.js';
+import { ToolTestingEngine } from './testing/ToolTestingEngine.js';
+import { ErrorObservabilityEngine } from './maintenance/ErrorObservabilityEngine.js';
+import { MaintenanceEngine } from './maintenance/MaintenanceEngine.js';
+import { SelfRepairEngine } from './maintenance/SelfRepairEngine.js';
+import { LearningEngine } from './maintenance/LearningEngine.js';
+import { UpgradeEngine } from './upgrades/UpgradeEngine.js';
 import { registerBuiltins } from './tools/BuiltinTools.js';
 import { registerStandardVerifiers } from './verification/VerificationEngine.js';
 import { InputEngine } from './input/InputEngine.js';
-import type { RequestEnvelope, RequestSource } from './contracts/domain.js';
+import { Identity } from './contracts/identity.js';
+import type { ExecutionLedgerEntry, RequestEnvelope, RequestSource } from './contracts/domain.js';
 import type { BootStatePayload, RuntimeStatePayload } from './contracts/ipc.js';
 
 export interface NovaBackendOptions {
@@ -53,6 +66,16 @@ export class NovaBackend {
   readonly selector: AgentSelector;
   readonly lifecycle: LifecycleEngine;
   readonly input: InputEngine;
+  readonly stateMachine: StateMachine;
+  readonly errors: ErrorObservabilityEngine;
+  readonly health: HealthEngine;
+  readonly maintenance: MaintenanceEngine;
+  readonly selfRepair: SelfRepairEngine;
+  readonly learning: LearningEngine;
+  readonly upgrades: UpgradeEngine;
+  readonly personality: PersonalityEngine;
+  readonly output: OutputEngine;
+  readonly subagents: AgentOrchestrator;
   agent: NovaAgent | null = null;
   private ready = false;
 
@@ -74,7 +97,19 @@ export class NovaBackend {
     this.providers = new ProviderRegistry();
     this.selector = new AgentSelector(this.providers);
     this.lifecycle = new LifecycleEngine();
+    this.stateMachine = new StateMachine();
     this.input = new InputEngine();
+    this.errors = new ErrorObservabilityEngine(ud);
+    this.personality = new PersonalityEngine(this.settings);
+    this.output = new OutputEngine(this.personality);
+    // Health/Maintenance/Upgrade/SelfRepair/Learning constructed after their
+    // dependencies exist (bridge/library/providers are ready above).
+    this.health = new HealthEngine(this.library, this.bridge, this.providers);
+    this.maintenance = new MaintenanceEngine(this.health, this.errors, this.library);
+    this.selfRepair = new SelfRepairEngine(this.library, this.selector, new ValidationEngine(this.bridge), new ToolTestingEngine(this.bridge), this.bridge);
+    this.learning = new LearningEngine(this.memory);
+    this.upgrades = new UpgradeEngine(ud);
+    this.subagents = new AgentOrchestrator(this.selector);
   }
 
   private initProviders(): void {
@@ -98,10 +133,16 @@ export class NovaBackend {
       selector,
       this.bridge,
       () => selector.trySelect('reasoning'),
+      this.stateMachine,
+      this.learning,
+      this.errors,
     );
     // Register audited built-in handlers onto the agent's execution engine.
     registerBuiltins(this.agent.engines.executor, { bridge: this.bridge, workspace: this.workspace });
     registerStandardVerifiers(this.agent.engines.verification, this.library);
+    // Continuous self-monitoring + upgrade engines run while the app is open.
+    this.maintenance.start();
+    this.upgrades.start();
   }
 
   /** Start the backend following the lifecycle order. Returns true when READY. */
@@ -119,7 +160,8 @@ export class NovaBackend {
     });
     if (ok) {
       this.ready = true;
-      logger.info('[backend] NOVA New Backend READY');
+      this.stateMachine.transition('READY');
+      logger.info(`[backend] ${Identity.name} New Backend READY (wake word: ${Identity.wakeWord})`);
     }
     return ok;
   }
@@ -130,9 +172,20 @@ export class NovaBackend {
 
   /** Handle a raw text request from any source. Returns a NovaResult. */
   async handleRequest(text: string, source: RequestSource = 'typed'): Promise<ReturnType<NovaAgent['run']>> {
-    if (!this.agent) throw new Error('NOVA backend is not initialized. Call start() first.');
+    if (!this.agent) throw new Error(`${Identity.name} backend is not initialized. Call start() first.`);
+    if (this.stateMachine.isBusy()) this.stateMachine.transition('UNDERSTANDING');
     const envelope = this.input.normalize(text, source, { wakeWordDetected: source === 'whisper' });
-    return this.agent.run(envelope);
+    const result = await this.agent.run(envelope);
+    // Learn from the task and present through the coherent Output + Personality
+    // layer so the user experiences a single cohesive assistant.
+    this.learning.learnFromTask(result.entry);
+    if (result.status === 'completed') this.stateMachine.resetToIdle();
+    return result;
+  }
+
+  /** Compose the final user-facing response for a ledger entry (Output + Personality). */
+  composeResponse(entry: ExecutionLedgerEntry): string {
+    return this.output.compose(entry);
   }
 
   /** Handle an already-normalized request envelope. */
@@ -190,10 +243,16 @@ export class NovaBackend {
     }));
   }
 
-  /** Graceful shutdown following the lifecycle order. */
+  /** Graceful shutdown following the lifecycle order (no zombie workers). */
   async shutdown(): Promise<void> {
+    this.stateMachine.transition('SHUTTING_DOWN');
     await this.lifecycle.shutdown({
-      orchestrator: () => { this.agent = null; },
+      orchestrator: () => {
+        this.maintenance.stop();
+        this.upgrades.stop();
+        this.subagents.disposeAll();
+        this.agent = null;
+      },
       capability: () => {},
       voice: () => {},
       providers: () => {},
@@ -205,13 +264,16 @@ export class NovaBackend {
     });
     this.telemetry.flush();
     this.telemetry.close();
+    this.errors.close();
+    this.upgrades.close();
     this.ledger.close();
     this.workspace.closeStore();
     this.settings.close();
     this.library.close();
     this.memory.close();
     this.ready = false;
-    logger.info('[backend] NOVA New Backend shutdown complete');
+    this.stateMachine.transition('OFFLINE');
+    logger.info(`[backend] ${Identity.name} New Backend shutdown complete`);
   }
 
   /** Convenience for tests/CLI. */

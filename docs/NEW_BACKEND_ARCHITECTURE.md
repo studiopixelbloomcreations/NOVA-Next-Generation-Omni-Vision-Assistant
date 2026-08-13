@@ -1,9 +1,13 @@
-# NOVA Genesis — New Backend Architecture
+# A.D.A.M. — New Backend Architecture
 
 > **Status: ACTIVE.** This document describes the New Backend (`New Backend/`)
-> that is now the only active backend of NOVA Genesis. The previous backend
-> (`src/main/main.ts` + `src/main/services/*`) is **LEGACY — DISABLED** and
-> retained only for reference/rollback. The frontend is **UNCHANGED**.
+> that is now the only active backend of the application. The runtime AI
+> identity is **A.D.A.M. (Autonomous Digital Analytical Mind)**, wake word
+> **ADAM**, voice **Charon**. The repository name and the existing frontend
+> keep historical "NOVA / NOVA Genesis" references; the RUNTIME identity is
+> A.D.A.M. The previous backend (`src/main/main.ts` + `src/main/services/*`)
+> is **LEGACY — DISABLED** and retained only for reference/rollback. The
+> frontend is **UNCHANGED**.
 
 ---
 
@@ -399,7 +403,34 @@ The `nova2:*` block is strictly additive and never required by the UI.
 
 ---
 
-## 16. Testing
+## 16. A.D.A.M. Additions (self-monitoring / self-repair / upgrades)
+
+The core architecture above is complemented by continuous self-management
+systems that start with the backend and stop cleanly on close:
+
+| System | File | Responsibility |
+|---|---|---|
+| **Identity** | `contracts/identity.ts` | Canonical runtime identity (A.D.A.M. / ADAM / Charon / Sir); every prompt & personality string derives from it. |
+| **State Machine** | `lifecycle/StateMachine.ts` | Backend states (IDLE→…→READY/OFFLINE/SHUTTING_DOWN) surfaced to the existing frontend; no redesign. |
+| **Personality / Output** | `reasoning/PersonalityEngine.ts`, `reasoning/OutputEngine.ts` | Calm, formal A.D.A.M. presentation and coherent final-response composition (never alters facts). |
+| **Health** | `maintenance/HealthEngine.ts` | Per-subsystem health (healthy/degraded/warning/critical/offline): python, providers, tools, memory. |
+| **Error Observability** | `maintenance/ErrorObservabilityEngine.ts` | Every significant failure → structured ErrorRecord fed to maintenance/recovery/memory/telemetry. |
+| **Maintenance** | `maintenance/MaintenanceEngine.ts` | Silent interval scan → MaintenanceFinding[]; observes only, never uncontrolled changes. |
+| **Self-Repair** | `maintenance/SelfRepairEngine.ts` | Staged repair of failing tools: detect→classify→patch via coding agent→validate→sandbox→stage; never overwrites production unvalidated. |
+| **Upgrade** | `upgrades/UpgradeEngine.ts` | Propose→build isolated candidate in `staging/upgrades/<id>`→validate→UPGRADE READY→user trial→automatic rollback on failure. |
+| **Learning** | `maintenance/LearningEngine.ts` | Records successful/failed strategies and recalls relevant lessons on future requests. |
+| **Subagents** | `orchestration/AgentOrchestrator.ts` | Scoped, bounded, disposable specialist subagents (architecture/python/security/provider/qa) with aggregated conclusions. |
+| **Model matrix** | `providers/ProviderRegistry.ts` | Dynamic model capability matrix (reasoning/coding/speed/reliability/context), refreshed periodically; strongest-for-role selection. |
+
+**Safety invariants (Systems 36):** Maintenance and Upgrade engines never
+overwrite production, never install dependencies without validation, never
+touch the frontend, never bypass sandbox/permissions, never replace working
+tools with untested ones, and never delete user files or expose secrets. All
+changes are staged and tested first; failed trials roll back automatically.
+
+---
+
+## 17. Testing
 
 See `docs/NEW_BACKEND_VERIFICATION.md` for what is actually verified. The suite:
 

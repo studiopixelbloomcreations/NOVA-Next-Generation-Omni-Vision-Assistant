@@ -27,7 +27,7 @@ async function main() {
   await backend.start();
 
   console.log('\n==============================================================');
-  console.log('USER: Analyze my Downloads folder and tell me which file is the largest.');
+  console.log('USER: ADAM. Analyze my Downloads folder and tell me which file is the largest.');
   console.log('==============================================================\n');
 
   const result = await backend.handleRequest(

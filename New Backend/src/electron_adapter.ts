@@ -74,11 +74,15 @@ export function wireElectron(backend: NovaBackend): string[] {
 
   handle(NovaIpcChannel.TRIGGER_AUTOMATION, async (text: unknown) => {
     const result = await backend.handleRequest(String(text ?? ''), 'typed');
-    return { success: result.status === 'completed', handled: 'nova2', trace: result.entry, summary: result.summary };
+    // Present the composed A.D.A.M. response through the existing text channel.
+    const composed = backend.composeResponse(result.entry);
+    broadcast(electron, NovaIpcChannel.AI_TEXT_TOKEN, composed);
+    return { success: result.status === 'completed', handled: 'adam', trace: result.entry, summary: result.summary };
   });
 
   handle(NovaIpcChannel.RUN_TASK, async (text: unknown) => {
     const result = await backend.handleRequest(String(text ?? ''), 'typed');
+    broadcast(electron, NovaIpcChannel.AI_TEXT_TOKEN, backend.composeResponse(result.entry));
     return result.entry;
   });
 

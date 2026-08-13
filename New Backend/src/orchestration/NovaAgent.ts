@@ -34,6 +34,9 @@ import { TelemetryEngine } from '../telemetry/TelemetryEngine.js';
 import { WorkspaceEngine } from '../workspace/WorkspaceEngine.js';
 import { Nova2Config } from '../core/config.js';
 import { logger } from '../core/logger.js';
+import { StateMachine } from '../lifecycle/StateMachine.js';
+import { LearningEngine } from '../maintenance/LearningEngine.js';
+import { ErrorObservabilityEngine } from '../maintenance/ErrorObservabilityEngine.js';
 
 export interface NovaResult {
   entry: ExecutionLedgerEntry;
@@ -60,6 +63,9 @@ export class NovaAgent extends EventEmitter {
   private ledger: ExecutionLedger;
   private telemetry: TelemetryEngine;
   private workspace: WorkspaceEngine;
+  private stateMachine: StateMachine;
+  private learning: LearningEngine;
+  private errorObservability: ErrorObservabilityEngine;
 
   constructor(
     private readonly library: ToolLibrary,
@@ -71,6 +77,9 @@ export class NovaAgent extends EventEmitter {
     selector: AgentSelector,
     bridge: PythonRuntimeBridge,
     providerSelectFn: () => ReturnType<AgentSelector['trySelect']>,
+    stateMachine?: StateMachine,
+    learning?: LearningEngine,
+    errorObservability?: ErrorObservabilityEngine,
   ) {
     super();
     this.memory = memory;
@@ -89,6 +98,9 @@ export class NovaAgent extends EventEmitter {
     this.executor = new ExecutionEngine(library, bridge);
     this.verification = new VerificationEngine(library, providerSelectFn);
     this.recovery = new RecoveryEngine();
+    this.stateMachine = stateMachine ?? new StateMachine();
+    this.learning = learning ?? new LearningEngine(memory);
+    this.errorObservability = errorObservability ?? new ErrorObservabilityEngine(Nova2Config.paths.userData);
   }
 
   get engines() {
@@ -141,6 +153,7 @@ export class NovaAgent extends EventEmitter {
 
     try {
       // 1) Intent.
+      this.stateMachine.transition('UNDERSTANDING');
       const providerForIntent = this.selector.trySelect('reasoning');
       intent = await this.intentEngine.classify(envelope, providerForIntent);
       this.emit('activity', { level: 'info', message: `Intent: ${intent.kind}` });
@@ -154,6 +167,7 @@ export class NovaAgent extends EventEmitter {
       envelope.environmentSnapshot = env;
 
       // 4) Capability discovery + planning.
+      this.stateMachine.transition('PLANNING');
       const tPlan = Date.now();
       const provider = this.selector.trySelect('planning');
       plan = await this.planning.plan(envelope, intent, memory, provider);
@@ -181,8 +195,29 @@ export class NovaAgent extends EventEmitter {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       errors.push(message);
+      this.errorObservability.capture({ subsystem: 'agent', message, requestId: envelope.requestId, taskId: ids.taskId }, err);
       logger.error('[nova_agent] turn failed', { error: message });
     }
+    // Learn from the outcome so future requests leverage prior knowledge.
+    this.learning.learnFromTask({
+      requestId: envelope.requestId,
+      taskId: ids.taskId,
+      executionId: ids.executionId,
+      transcript: envelope.transcript,
+      intent,
+      plan,
+      steps: stepResults,
+      status,
+      retries,
+      errors,
+      latencyMs: Date.now() - t0,
+      startedAt,
+      completedAt: Date.now(),
+      summary: '',
+      id: ids.id,
+      agentProviderId: null,
+      verification: { passed: status === 'completed', detail: '' },
+    } as ExecutionLedgerEntry);
 
     const latencyMs = Date.now() - t0;
     this.telemetry.record('request', latencyMs, status === 'completed', { requestId: envelope.requestId });
@@ -282,6 +317,7 @@ export class NovaAgent extends EventEmitter {
         }
         if (!tool) {
           // Forge a missing capability.
+          this.stateMachine.transition('FORGING');
           this.emit('activity', { level: 'info', message: `Forging capability: ${step.capability ?? envelope.transcript}` });
           const tForge = Date.now();
           const forged = await this.forge.forge(step.capability ?? envelope.transcript, {});
@@ -292,6 +328,7 @@ export class NovaAgent extends EventEmitter {
         if (!tool) throw new Error('unable to obtain a capability for this step');
         lastTool = tool;
 
+        this.stateMachine.transition('EXECUTING');
         const tTool = Date.now();
         const args = this.deriveArgs(tool, step, envelope.transcript);
         const execution = await this.executor.executeTool(tool, args);
@@ -300,10 +337,12 @@ export class NovaAgent extends EventEmitter {
         if (!execution.success) throw new Error(execution.error ?? 'tool execution failed');
 
         // Independent verification.
+        this.stateMachine.transition('VERIFYING');
         const tVerify = Date.now();
         const outcome = await this.verification.verify(execution.payload, step.verification, tool.category, envelope.transcript);
         this.telemetry.record('verification', Date.now() - tVerify, outcome.passed);
         if (!outcome.passed) {
+          this.stateMachine.transition('RECOVERING');
           const report = this.recovery.toReport(new Error(outcome.detail), attempts);
           const decision = this.recovery.decide(report);
           this.recovery.log(report, decision);

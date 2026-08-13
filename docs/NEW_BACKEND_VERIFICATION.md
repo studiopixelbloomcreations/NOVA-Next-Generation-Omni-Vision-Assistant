@@ -39,9 +39,12 @@ These are **real** runs — no mocks — executed against the actual filesystem 
 the actual Python interpreter.
 
 ### 2.1 Full test suite — `New Backend/` → `npm test`
-**29/29 tests pass** (26 unit + 3 integration).
+**40/40 tests pass** (37 unit + 3 integration). The A.D.A.M. additions add
+11 unit tests covering identity migration, Personality/Output engines, Error
+Observability, Health, Maintenance findings, Upgrade staging/trial/rollback,
+Learning recall, and subagent bounding/disposal.
 
-- **Unit (26):**
+- **Unit (37):**
   - Intent classification: tool_creation, research, computer_task,
     conversational, AI-assisted (fake provider), secret scrubbing in envelopes.
   - Tool naming: slugification, uniqueness, fallback.
@@ -53,6 +56,13 @@ the actual Python interpreter.
   - PathGuard: sandbox containment + escape blocking.
   - Validation: valid source PASS; banned import BLOCK; missing entry BLOCK —
     via **real Python AST checks**.
+  - **Identity:** canonical constants are A.D.A.M./ADAM/Charon/Sir; runtime
+    NOVA references rebrand correctly; Personality preserves facts; Output
+    surfaces the important result.
+  - **Maintenance/Upgrade/Learning:** Error Observability persists structured
+    errors; Health reports real python state; Maintenance flags an unhealthy
+    tool without mutating the library; Upgrade stages→validates→trials→rolls
+    back without touching production; Learning recalls a recorded success.
 
 - **Integration (3):**
   1. **Forge end-to-end (template path):** missing capability →

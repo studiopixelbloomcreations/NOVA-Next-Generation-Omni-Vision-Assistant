@@ -5,6 +5,7 @@
 // Charon via Gemini Live; local Whisper is the low-latency transcription path.
 import { EventEmitter } from 'node:events';
 import type { VoiceEvent, VoiceState } from '../contracts/domain.js';
+import { Identity } from '../contracts/identity.js';
 import { logger } from '../core/logger.js';
 
 export interface VoiceLifecycle {
@@ -18,7 +19,7 @@ export class VoiceEngine extends EventEmitter {
   private lastWakeAt: number | null = null;
   private listening = false;
 
-  constructor(private readonly wakeWord = 'NOVA') {
+  constructor(private readonly wakeWord: string = Identity.wakeWord) {
     super();
   }
 

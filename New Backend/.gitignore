@@ -3,3 +3,5 @@ dist/
 dist-cjs/
 .nova2-data/
 *.log
+__pycache__/
+*.pyc

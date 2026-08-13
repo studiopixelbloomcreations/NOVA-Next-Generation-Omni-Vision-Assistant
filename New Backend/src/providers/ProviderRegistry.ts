@@ -6,8 +6,25 @@ import type { AiProvider, ProviderCapability } from './ProviderTypes.js';
 import { Nova2Config } from '../core/config.js';
 import { logger } from '../core/logger.js';
 
+export interface ModelCapabilityRecord {
+  provider: string;
+  label: string;
+  reasoningScore: number;
+  codingScore: number;
+  speedScore: number;
+  reliability: number;
+  contextWindow: number;
+  toolUse: boolean;
+  structuredOutput: boolean;
+  availability: boolean;
+  latencyMs: number | null;
+  checkedAt: number;
+}
+
 export class ProviderRegistry {
   private providers = new Map<string, AiProvider>();
+  /** Dynamic model capability matrix, refreshed periodically (System 15). */
+  private matrix = new Map<string, ModelCapabilityRecord>();
 
   register(provider: AiProvider): void {
     this.providers.set(provider.id, provider);
@@ -78,5 +95,43 @@ export class ProviderRegistry {
 
   describe(): Record<string, unknown> {
     return Object.fromEntries(this.all().map(p => [p.id, p.describe()]));
+  }
+
+  // ---------------------------------------------------------------------------
+  // Dynamic model capability matrix (System 15)
+  // ---------------------------------------------------------------------------
+
+  /** Refresh the capability matrix from the current configured providers. */
+  refreshMatrix(): ModelCapabilityRecord[] {
+    const now = Date.now();
+    for (const p of this.all()) {
+      const prof = this.profile(p);
+      const base: ModelCapabilityRecord = {
+        provider: p.id,
+        label: p.label,
+        reasoningScore: prof.role === 'reasoning' ? 9 : prof.role === 'coding' ? 7 : 5,
+        codingScore: prof.role === 'coding' ? 9 : prof.role === 'reasoning' ? 7 : 5,
+        speedScore: Math.max(1, 10 - prof.latencyRank),
+        reliability: prof.reliability,
+        contextWindow: prof.contextWindow,
+        toolUse: true,
+        structuredOutput: true,
+        availability: p.isConfigured() && p.isAvailable(),
+        latencyMs: null,
+        checkedAt: now,
+      };
+      this.matrix.set(p.id, base);
+    }
+    return this.matrixOf();
+  }
+
+  matrixOf(): ModelCapabilityRecord[] {
+    return Array.from(this.matrix.values());
+  }
+
+  /** Strongest model by a weighted score for a role (uses live matrix). */
+  strongestFor(role: ProviderCapability['role']): AiProvider | null {
+    this.refreshMatrix();
+    return this.selectFor(role);
   }
 }

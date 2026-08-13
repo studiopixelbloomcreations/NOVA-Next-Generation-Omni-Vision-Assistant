@@ -75,7 +75,7 @@ function resolvePythonRuntimeRoot(): string {
 }
 
 export const Nova2Config = {
-  app: { name: 'NOVA Genesis', version: '2.0.0' },
+  app: { name: 'A.D.A.M.', version: '2.1.0' },
   paths: {
     get userData(): string {
       return resolveUserData();
@@ -135,7 +135,7 @@ export const Nova2Config = {
   workspace: {
     surfaceTypes: ['web', 'video', 'image', 'pdf', 'file', 'note', 'news', 'tool-result', 'code'] as const,
   },
-  voice: { wakeWord: 'NOVA' },
+  voice: { wakeWord: 'ADAM' },
   home: homedir(),
 };
 

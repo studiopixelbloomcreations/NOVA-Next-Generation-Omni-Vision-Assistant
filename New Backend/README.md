@@ -1,9 +1,12 @@
-# NOVA Genesis — New Backend
+# A.D.A.M. — New Backend (Autonomous Digital Analytical Mind)
 
-The active, standalone backend for NOVA Genesis. A clean, modular,
+The active, standalone backend for the A.D.A.M. desktop AI. A clean, modular,
 engine-per-responsibility architecture that turns the existing NOVA UI into a
 genuinely autonomous desktop AI. Electron-only + a local Python runtime + local
 desktop execution. **No localhost server, no browser backend.**
+
+- **Runtime identity:** A.D.A.M. / ADAM (wake word **ADAM**, voice **Charon**).
+- **Reasoning/coding head:** Groq. **Conversational head:** Gemini Live.
 
 See `../docs/NEW_BACKEND_ARCHITECTURE.md` (design) and
 `../docs/NEW_BACKEND_VERIFICATION.md` (what was verified).

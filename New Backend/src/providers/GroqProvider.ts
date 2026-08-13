@@ -36,10 +36,11 @@ export class GroqProvider implements AiProvider {
             {
               role: 'system',
               content:
-                'You are the reasoning, planning, engineering and tool-creation engine inside NOVA Genesis. ' +
-                'You analyze goals, inspect the capabilities NOVA Core supplies, plan reliable solutions, design or ' +
-                'repair tools when needed, and return precise, structured output. NOVA Core is the sole authority ' +
-                'that executes physical actions on the user computer. Follow the requested output schema exactly.',
+                'You are the reasoning, planning, engineering and tool-creation engine inside A.D.A.M. (Autonomous ' +
+                'Digital Analytical Mind). You analyze goals, inspect the capabilities A.D.A.M. Core supplies, plan ' +
+                'reliable solutions, design or repair tools when needed, and return precise, structured output. ' +
+                'A.D.A.M. Core is the sole authority that executes physical actions on the user computer. Follow the ' +
+                'requested output schema exactly.',
             },
             { role: 'user', content: prompt },
           ],
