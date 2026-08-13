@@ -14,11 +14,7 @@ export const NovaConfig = {
   ai: {
     liveModel: process.env.NOVA_LIVE_MODEL || 'models/gemini-2.5-flash-native-audio-preview-12-2025',
     codegenModel: process.env.NOVA_CODEGEN_MODEL || 'models/gemini-2.5-pro',
-    // Canonical Gemini Live Native Audio voice. Keep this as the single runtime default.
     liveVoice: process.env.NOVA_LIVE_VOICE || 'Charon',
-    // Gemini is the conversational head; Groq is the reasoning/engineering head.
-    // Provider IDs are deliberately independent of model/vendor branding so the
-    // orchestration layer can be swapped without changing task semantics.
     providerPriority: (process.env.NOVA_PROVIDER_PRIORITY || 'gemini,groq').split(',').map(s => s.trim().toLowerCase()).filter(Boolean),
     requestTimeoutMs: intFromEnv('NOVA_AI_TIMEOUT_MS', 30000),
     groqModel: process.env.NOVA_GROQ_MODEL || 'llama-3.3-70b-versatile',
@@ -29,7 +25,7 @@ export const NovaConfig = {
     maxSourceBytes: intFromEnv('NOVA_TOOL_MAX_BYTES', 64 * 1024),
     healthThreshold: 0.5,
     maxVersionsPerTool: intFromEnv('NOVA_TOOL_MAX_VERSIONS', 8),
-    toolsDirName: 'tools',
+    toolsDirName: process.env.NOVA_TOOLS_DIR_NAME || 'tools',
     enforcePermissions: process.env.NOVA_ENFORCE_PERMISSIONS !== 'false',
     requireApprovalForSynthesis: false,
     workerIsolation: process.env.NOVA_TOOL_WORKER !== 'false',
@@ -59,7 +55,14 @@ export const NovaConfig = {
     get ledgerDb(): string { return join(this.userData, 'interaction_ledger.db'); },
     get graphDb(): string { return join(this.userData, 'knowledge_graph.db'); },
     get registryDb(): string { return join(this.userData, 'tool_registry.db'); },
-    get toolsRoot(): string { return join(this.userData, NovaConfig.tooling.toolsDirName); },
+    // NOVA tools are local and persistent. An explicit absolute override is
+    // supported for development/testing; packaged builds default to the
+    // Electron user-data directory so Windows remains writable.
+    get toolsRoot(): string {
+      const override = process.env.NOVA_TOOLS_ROOT?.trim();
+      if (override) return override;
+      return join(this.userData, NovaConfig.tooling.toolsDirName);
+    },
     get workspaceDb(): string { return join(this.userData, 'nova.db'); },
     get artifactsRoot(): string { return join(this.userData, 'artifacts'); },
     get auditLog(): string { return join(this.userData, 'nova_audit.log'); },

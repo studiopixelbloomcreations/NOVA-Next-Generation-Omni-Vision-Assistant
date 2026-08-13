@@ -92,6 +92,9 @@ export class GroqProvider implements AiProvider {
     if (!this.isConfigured()) throw new Error('GROQ_API_KEY is not configured.');
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? REST_TIMEOUT_DEFAULT_MS);
+    const forgeSystemInstruction = /NOVA's Tool Forge|Tool Forge|pythonSource|testSource/i.test(prompt)
+      ? '\n\nSPECIAL TOOL-FORGE CONTRACT: When generating a NOVA forged tool, the generated Python MUST use the curated `nova_tool_sdk` capability surface for real computer actions. Do NOT use subprocess, socket, ctypes, os.system, eval, exec, or arbitrary OS primitives directly in generated tool source. Instead import explicit functions from `nova_tool_sdk` such as launch, close_process, active_window, system_info, screenshot, type_text, key_press, clipboard_get, clipboard_set, file_read, file_write, and web_get. The SDK is the controlled bridge: sandbox validation uses a non-destructive shim; production execution uses the real host implementation. The generated tool must contain real implementation code and must never be an explanatory stub, mock, echo, placeholder, or fake success response. Keep the tool itself Python-only and persistable.'
+      : '';
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
@@ -99,7 +102,7 @@ export class GroqProvider implements AiProvider {
         body: JSON.stringify({
           model: NovaConfig.ai.groqModel,
           messages: [
-            { role: 'system', content: 'You are the reasoning and engineering engine inside NOVA Genesis. Analyze goals, inspect capabilities supplied by NOVA Core, plan reliable solutions, design or repair tools when needed, and return precise actionable plans. NOVA Core is the sole authority that executes physical actions on the user computer.' },
+            { role: 'system', content: 'You are the reasoning and engineering engine inside NOVA Genesis. Analyze goals, inspect capabilities supplied by NOVA Core, plan reliable solutions, design or repair tools when needed, and return precise actionable plans. NOVA Core is the sole authority that executes physical actions on the user computer.' + forgeSystemInstruction },
             { role: 'user', content: prompt },
           ],
           max_tokens: opts.maxOutputTokens ?? 2048,
