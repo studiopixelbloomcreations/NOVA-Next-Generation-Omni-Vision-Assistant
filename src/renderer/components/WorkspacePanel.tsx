@@ -1,5 +1,5 @@
 // src/renderer/components/WorkspacePanel.tsx
-// NOVA Workspace surfaces — everything NOVA presents stays inside the app.
+// A.D.A.M. Workspace surfaces — everything A.D.A.M. presents stays inside the app.
 //
 // Renders real internal surfaces pushed by the Workspace Manager:
 //   web/video  -> <webview> (real page, never an external browser)
@@ -160,14 +160,14 @@ export const WorkspacePanel: React.FC<WorkspacePanelProps> = ({ surfaces, onClos
       <div className="px-4 py-3 border-b border-[#ffffff10] flex items-center justify-between flex-shrink-0">
         <div>
           <h5 className="font-orbitron text-[10px] font-bold tracking-[0.2em] text-cyan-300/90 uppercase">
-            NOVA Workspace
+            A.D.A.M. Workspace
           </h5>
           <p className="font-rajdhani text-[10px] text-[#ffffff50] mt-0.5">
             {openSurfaces.length} surface{openSurfaces.length === 1 ? '' : 's'} open
           </p>
         </div>
         <div className="text-[9px] text-[#ffffff40] font-rajdhani tracking-wider">
-          INSIDE NOVA
+          INSIDE A.D.A.M.
         </div>
       </div>
 
