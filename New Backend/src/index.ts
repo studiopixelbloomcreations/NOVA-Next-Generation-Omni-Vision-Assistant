@@ -50,7 +50,7 @@ import { registerStandardVerifiers } from './verification/VerificationEngine.js'
 import { InputEngine } from './input/InputEngine.js';
 import { Identity } from './contracts/identity.js';
 import type { ExecutionLedgerEntry, RequestEnvelope, RequestSource } from './contracts/domain.js';
-import type { BootStatePayload, RuntimeStatePayload } from './contracts/ipc.js';
+import type { BootStatePayload, RuntimeStatePayload, SystemTelemetryPayload, MicStatePayload, ContextChipPayload, ActivityEvent } from './contracts/ipc.js';
 
 export interface NovaBackendOptions {
   silent?: boolean;
@@ -300,20 +300,88 @@ export class NovaBackend {
   }
 
   // --- Frontend-facing queries (used by the Electron adapter) ---
+  /** Exact IRuntimeStatePayload shape the frontend consumes. */
   runtimeState(): RuntimeStatePayload {
+    const groqOk = this.providers.get('groq')?.isConfigured() ?? false;
+    const geminiOk = this.providers.get('gemini')?.isConfigured() ?? false;
     return {
-      bootedAt: this.settings.get().identity ? Date.now() : Date.now(),
+      bootedAt: this.startedAt(),
       overall: this.ready ? 'ONLINE' : 'BOOTING',
-      python: this.ready ? 'online' : 'starting',
-      providers: Object.fromEntries(this.providers.all().map(p => [p.id, p.isConfigured() ? 'configured' : 'unconfigured'])),
-      capabilityIndex: this.ready ? 'online' : 'starting',
-      orchestrator: this.agent ? 'online' : 'starting',
+      electron: 'online',
+      python: 'online',
+      gemini: geminiOk ? 'online' : 'unconfigured',
+      groq: groqOk ? 'online' : 'unconfigured',
+      memory: this.memory ? 'online' : 'offline',
+      toolRegistry: this.agent ? 'online' : 'starting',
+      toolExecutor: this.agent ? 'online' : 'starting',
+      microphone: this.mic?.snapshot?.available ? 'online' : 'offline',
+      speaker: this.charon ? 'online' : 'offline',
+      details: {
+        wakeWord: Identity.wakeWord,
+        identity: Identity.name,
+        voice: Identity.voice,
+      },
       currentTask: this.ready ? 'Ready' : 'Booting',
       lastError: null,
       uptimeMs: Date.now() - this.startedAt(),
       timestamp: Date.now(),
-      backend: 'NEW_BACKEND_v2',
     };
+  }
+
+  /** Build a live system-telemetry payload for the ~1Hz frontend stream. */
+  systemTelemetry(): SystemTelemetryPayload {
+    return {
+      captureWidth: 1280,
+      captureHeight: 720,
+      frameRate: 0,
+      mutatedBlocks: 0,
+      totalBlocks: 0,
+      geminiState: this.liveBridge.getConnectionState(),
+      streamLatencyMs: 0,
+      timestamp: Date.now(),
+    };
+  }
+
+  /** Build the exact IMicStatePayload shape the frontend consumes. */
+  micState(): MicStatePayload {
+    const snap = this.mic.snapshot;
+    return {
+      state: snap.state,
+      available: snap.available,
+      listening: snap.listening,
+      muted: snap.muted,
+      devices: [],
+      defaultCapture: snap.defaultCapture,
+      lastError: snap.lastError,
+      lastDiagnostic: null,
+      timestamp: Date.now(),
+    };
+  }
+
+  /** Build context chips from the current environment/runtime truth. */
+  async contextChips(): Promise<ContextChipPayload> {
+    const chips: ContextChipPayload['chips'] = [
+      { id: 'identity', label: Identity.name, type: 'status', severity: 'low' },
+      { id: 'wake', label: `Wake: ${Identity.wakeWord}`, type: 'status', severity: 'low' },
+      { id: 'voice', label: `Voice: ${Identity.voice}`, type: 'status', severity: 'low' },
+      { id: 'tools', label: `${this.library.all().filter(t => t.enabled).length} tools`, type: 'status', severity: 'low' },
+    ];
+    if (!this.providers.get('groq')?.isConfigured()) {
+      chips.push({ id: 'groq', label: 'Groq not configured', type: 'alert', severity: 'medium' });
+    }
+    if (!this.providers.get('gemini')?.isConfigured()) {
+      chips.push({ id: 'gemini', label: 'Gemini not configured', type: 'alert', severity: 'medium' });
+    }
+    return { chips };
+  }
+
+  recentActivity(limit = 20): ActivityEvent[] {
+    return this.ledger.recent(limit).map(e => ({
+      id: e.executionId,
+      ts: e.startedAt,
+      level: e.status === 'completed' ? 'success' : e.status === 'failed' ? 'error' : 'info',
+      message: (e.summary || e.transcript).slice(0, 120),
+    }));
   }
 
   private startedAt(): number {
@@ -323,8 +391,14 @@ export class NovaBackend {
   bootState(): BootStatePayload {
     return {
       bootSteps: this.lifecycle.getSteps().map(s => ({ stepId: s.stepId, label: s.label, status: s.status, timestamp: s.timestamp })),
+      telemetry: this.systemTelemetry(),
+      voiceState: this.liveBridge.getConnectionState(),
+      providers: {
+        gemini: this.providers.get('gemini')?.isConfigured() ?? false,
+        groq: this.providers.get('groq')?.isConfigured() ?? false,
+        liveConnected: this.liveBridge.isConnected(),
+      },
       timestamp: Date.now(),
-      backend: 'NEW_BACKEND_v2',
     };
   }
 

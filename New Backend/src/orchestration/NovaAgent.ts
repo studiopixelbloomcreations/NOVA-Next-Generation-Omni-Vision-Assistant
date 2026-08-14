@@ -242,8 +242,10 @@ export class NovaAgent extends EventEmitter {
 
       // 5) Execute each step with verification + recovery.
       this.diagnostics?.markTaskStarted();
+      this.emit('synthesis-phase', { phase: 'PLANNING', steps: [] });
       try {
         for (const step of plan.steps) {
+          this.emit('synthesis-phase', { phase: 'EXECUTING', steps: [{ id: step.id, goal: step.goal }] });
           const stepResult = await this.executeStep(envelope, step, memory);
           stepResults.push(stepResult);
           payloads.push(stepResult.payload);
@@ -264,24 +266,6 @@ export class NovaAgent extends EventEmitter {
       } finally {
         this.diagnostics?.markTaskEnded();
       }
-      for (const step of plan.steps) {
-        const stepResult = await this.executeStep(envelope, step, memory);
-        stepResults.push(stepResult);
-        payloads.push(stepResult.payload);
-        if (!stepResult.success) {
-          errors.push(stepResult.error ?? 'step failed');
-          retries += stepResult.attempts - 1;
-          if (stepResult.attempts > 1) retries += stepResult.attempts - 1;
-          if (stepResult.verification.passed) {
-            status = 'completed';
-          } else {
-            status = stepResults.length > 1 ? 'partial' : 'failed';
-          }
-          break;
-        }
-        if (stepResult.verification.passed) status = 'completed';
-      }
-      if (stepResults.length > 0 && stepResults.every(s => s.success && s.verification.passed)) status = 'completed';
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       errors.push(message);
@@ -340,6 +324,7 @@ export class NovaAgent extends EventEmitter {
       void this.memory.recordInteraction(envelope.transcript, summary);
     }
 
+    this.emit('synthesis-phase', { phase: status === 'completed' ? 'COMPLETED' : 'FAILED', steps: [] });
     this.emit('completed', entry);
     return { entry, status, summary, payloads, reusedTool };
   }
@@ -415,12 +400,16 @@ export class NovaAgent extends EventEmitter {
         if (!tool) {
           // Forge a missing capability.
           this.stateMachine.transition('FORGING');
+          this.emit('synthesis-phase', { phase: 'FORGING', steps: [{ id: step.id, goal: `Create: ${step.capability ?? envelope.transcript}` }] });
           this.emit('activity', { level: 'info', message: `Forging capability: ${step.capability ?? envelope.transcript}` });
           const tForge = Date.now();
           const forged = await this.forge.forge(step.capability ?? envelope.transcript, {});
           this.telemetry.record('forge', Date.now() - tForge, true);
           tool = forged.reused ? this.library.getByTechnicalId(forged.tool.technicalId) : forged.tool;
           lastPayload = null;
+          if (tool && !forged.reused) {
+            this.emit('tool-created', { id: tool.id, name: tool.displayName, technicalId: tool.technicalId, description: tool.description, status: tool.status });
+          }
         }
         if (!tool) throw new Error('unable to obtain a capability for this step');
         lastTool = tool;

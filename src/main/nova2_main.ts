@@ -11,7 +11,7 @@
 // starts. See docs/NEW_BACKEND_ARCHITECTURE.md.
 // ============================================================================
 import 'dotenv/config';
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, ipcMain } from 'electron';
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 
@@ -54,7 +54,7 @@ function createWindow(): void {
 }
 
 // Webview lockdown mirrors the legacy hardening (workspace-first content).
-app.on('will-attach-webview', (event: Electron.Event, webPreferences: Record<string, unknown>, params: { src?: string }) => {
+(app as any).on('will-attach-webview', (event: Electron.Event, webPreferences: Record<string, unknown>, params: { src?: string }) => {
   delete webPreferences.preload;
   webPreferences.nodeIntegration = false;
   webPreferences.contextIsolation = true;
@@ -68,6 +68,28 @@ app.on('web-contents-created', (_event: any, contents: any) => {
   contents.setWindowOpenHandler(() => ({ action: 'deny' }));
 });
 
+// Window control + HUD IPC (real window behavior, mirrors legacy main).
+function registerWindowIpc(): void {
+  ipcMain.on('window-minimize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize();
+  });
+  ipcMain.on('window-maximize', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      if (mainWindow.isMaximized()) mainWindow.unmaximize();
+      else mainWindow.maximize();
+    }
+  });
+  ipcMain.on('window-close', () => {
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.close();
+  });
+  // HUD visibility: toggle mouse event pass-through (real HUD behavior).
+  ipcMain.on('nova-ui:hud-visibility-req', (_e, makeVisible: boolean) => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setIgnoreMouseEvents(!makeVisible, { forward: true });
+    }
+  });
+}
+
 app.whenReady().then(async () => {
   const lock = app.requestSingleInstanceLock();
   if (!lock) { app.quit(); return; }
@@ -76,6 +98,7 @@ app.whenReady().then(async () => {
   // Boot the New Backend (lifecycle engine runs the ordered startup).
   backend = new NovaBackend({ logLevel: process.env.NOVA_LOG_LEVEL === 'debug' ? 'debug' : 'info' });
   const ready = await backend.start();
+  registerWindowIpc();
 
   // Wire the New Backend onto the EXISTING frontend IPC contract (UI unchanged).
   const { wireElectron } = loadBackend('../../New Backend/dist-cjs/electron_adapter.js');

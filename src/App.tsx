@@ -216,8 +216,8 @@ export const App: React.FC = () => {
 
       const onAiTextToken = (_event: any, token: string) => {
         setTranscripts(prev => {
-          if (prev.length === 0 || prev[prev.length - 1].sender !== 'NOVA AI') {
-            return [...prev, { sender: 'NOVA AI', text: token }];
+          if (prev.length === 0 || prev[prev.length - 1].sender !== 'A.D.A.M.') {
+            return [...prev, { sender: 'A.D.A.M.', text: token }];
           }
           const updated = [...prev];
           updated[updated.length - 1] = {
@@ -515,19 +515,19 @@ export const App: React.FC = () => {
           if (res.success === false) {
             setTranscripts(prev => [
               ...prev,
-              { sender: 'NOVA AI', text: res.error ?? 'NOVA is unavailable — check the provider connection.' },
+              { sender: 'A.D.A.M.', text: res.error ?? 'A.D.A.M. is unavailable — check the provider connection.' },
             ]);
           } else if (typeof res.response === 'string' && res.response.trim()) {
             // Reasoning/engineering answers from the reasoning engine are shown
             // in the transcript like any other NOVA response.
-            setTranscripts(prev => [...prev, { sender: 'NOVA AI', text: res.response }]);
+            setTranscripts(prev => [...prev, { sender: 'A.D.A.M.', text: res.response }]);
           }
         })
         .catch((err: unknown) => {
           setTranscripts(prev => [
             ...prev,
             {
-              sender: 'NOVA AI',
+              sender: 'A.D.A.M.',
               text: `Automation dispatch failed: ${err instanceof Error ? err.message : String(err)}`,
             },
           ]);

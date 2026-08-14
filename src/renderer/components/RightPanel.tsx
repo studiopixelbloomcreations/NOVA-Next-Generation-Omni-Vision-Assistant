@@ -10,7 +10,7 @@ import {
 } from '../../shared/ipc_protocols';
 
 export interface ITranscriptEntry {
-  sender: 'USER' | 'NOVA AI';
+  sender: 'USER' | 'A.D.A.M.';
   text: string;
 }
 

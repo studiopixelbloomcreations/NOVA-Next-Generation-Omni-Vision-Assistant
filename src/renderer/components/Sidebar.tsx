@@ -93,7 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div>
         <div className="mb-10 px-2">
           <h2 className="font-orbitron text-[18px] font-bold tracking-[0.25em] text-[#f5f8ff] drop-shadow-[0_0_8px_rgba(255,255,255,0.15)]">
-            NOVA AI
+            A.D.A.M.
           </h2>
           <p className="font-rajdhani text-[9px] font-semibold tracking-[0.2em] text-blue-400/40 uppercase mt-1">
             INTELLIGENCE WITHOUT LIMITS
@@ -193,7 +193,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
           <div>
             <h4 className="font-rajdhani text-[11px] font-bold tracking-[0.1em] text-[#f5f8ff] uppercase">
-              NOVA AI
+              A.D.A.M.
             </h4>
             <p
               className={`font-rajdhani text-[9px] font-medium tracking-[0.05em] uppercase ${connection.text}`}
