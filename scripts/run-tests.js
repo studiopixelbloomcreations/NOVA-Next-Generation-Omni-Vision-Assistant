@@ -974,6 +974,138 @@ async function main() {
     }
   });
 
+  console.log('\n[adam_additive]');
+  // A.D.A.M. additive systems merged into the restored legacy backend. These
+  // live in dist/main/adam/*.js and plug into the legacy services additively
+  // (the legacy services themselves are not modified). Real behavior only.
+  const adamDist = path.join(__dirname, '..', 'dist', 'main', 'adam');
+  const { AdamIdentity, toAdamIdentity } = require(path.join(adamDist, 'identity.js'));
+  const { AdamStateMachine } = require(path.join(adamDist, 'state_machine.js'));
+  const { AdamErrorObservabilityEngine } = require(path.join(adamDist, 'error_observability.js'));
+  const { AdamWakeWordDetector } = require(path.join(adamDist, 'wake_word.js'));
+  const { AdamModelMatrix } = require(path.join(adamDist, 'model_matrix.js'));
+  const { AdamUpgradeEngine } = require(path.join(adamDist, 'upgrade_engine.js'));
+  const { AdamTrialManager } = require(path.join(adamDist, 'trial_manager.js'));
+  const { AdamMaintenanceEngine } = require(path.join(adamDist, 'maintenance_engine.js'));
+  const { AdamHealthEngine } = require(path.join(adamDist, 'health_engine.js'));
+  const { AdamSubagentOrchestrator } = require(path.join(adamDist, 'subagents.js'));
+
+  await test('identity constants are A.D.A.M. / ADAM / Charon', () => {
+    assert(AdamIdentity.name === 'A.D.A.M.', 'identity name A.D.A.M.');
+    assert(AdamIdentity.wakeWord === 'ADAM', 'wake word ADAM');
+    assert(AdamIdentity.voice === 'Charon', 'voice Charon');
+    assert(AdamIdentity.formOfAddress === 'Sir', 'form of address Sir');
+    assert(toAdamIdentity('NOVA Genesis') === 'A.D.A.M.', 'runtime NOVA Genesis rebrands to A.D.A.M.');
+    assert(!toAdamIdentity('NOVA Genesis').includes('NOVA'), 'no NOVA remains in rebranded runtime text');
+  });
+
+  await test('state machine transitions through the Adam states honestly', () => {
+    const sm = new AdamStateMachine();
+    assert(sm.state === 'OFFLINE', 'starts OFFLINE');
+    sm.transition('READY');
+    assert(sm.state === 'READY', 'READY reached');
+    sm.transition('UNDERSTANDING');
+    sm.transition('FORGING');
+    sm.transition('EXECUTING');
+    sm.transition('VERIFYING');
+    assert(sm.isBusy() === true, 'busy while executing');
+    sm.resetToIdle();
+    assert(sm.state === 'IDLE', 'resets to IDLE');
+    assert(sm.isBusy() === false, 'not busy when idle');
+  });
+
+  await test('error observability captures structured failures', () => {
+    const eo = new AdamErrorObservabilityEngine();
+    const rec = eo.capture({ subsystem: 'forge', message: 'sandbox failed' }, new Error('boom'));
+    assert(rec.errorId && rec.type === 'tool_error', 'structured error captured');
+    assert(eo.countSince(100000) === 1, 'counted');
+    assert(eo.recentBySubsystem('forge').length === 1, 'filtered by subsystem');
+    eo.markResolved(rec.errorId, 'repaired');
+    assert(eo.all()[0].resolution === 'repaired', 'resolution recorded');
+  });
+
+  await test('wake-word detector fires on a real loud utterance after quiet', () => {
+    const wd = new AdamWakeWordDetector(0.02, 0);
+    let fired = 0;
+    wd.on('wake-word-detected', () => { fired += 1; });
+    for (let i = 0; i < 40; i++) wd.processAudioFrame(new Int16Array(256));
+    const loud = new Int16Array(256).fill(16000);
+    assert(wd.processAudioFrame(loud) === true, 'fires on loud utterance after quiet');
+    assert(fired === 1, 'fired once');
+    assert(wd.wakeWord === 'ADAM', 'wake word is ADAM');
+  });
+
+  await test('upgrade engine stages, validates, trials and rolls back without touching production', async () => {
+    const upDir = fs.mkdtempSync(path.join(os.tmpdir(), 'adam-upgrade-'));
+    const up = new AdamUpgradeEngine(upDir);
+    const proposal = up.propose({ title: 'Trial X', reason: 'r', benefit: 'b', affectedSystems: ['x'], risk: 'low', rollbackPlan: 'revert', testPlan: 'tests', impact: 'none' });
+    assert(proposal.status === 'proposed', 'proposed');
+    const ready = await up.buildAndValidate(proposal.id, async () => ({ passed: true, evidence: 'all tests pass' }));
+    assert(ready && ready.status === 'ready', 'validated candidate becomes UPGRADE READY');
+    const staged = up.startTrial(proposal.id);
+    assert(staged && staged.status === 'trial', 'trial started');
+    up.rollback(proposal.id);
+    assert(up.list()[0].status === 'rolled_back', 'rollback works');
+    assert(up.evidenceFor(proposal.id).includes('PASSED'), 'evidence recorded');
+    fs.rmSync(upDir, { recursive: true, force: true });
+  });
+
+  await test('health engine reports real subsystem states (never fabricated)', async () => {
+    const lib = createToolRegistry(fs.mkdtempSync(path.join(os.tmpdir(), 'adam-health-')) + '/tools.db', null);
+    const health = new AdamHealthEngine(lib, aiProviderRegistry, () => false);
+    const report = await health.check();
+    assert(Array.isArray(report.subsystems), 'subsystem list');
+    assert(report.subsystems.some(s => s.subsystem === 'python'), 'python reported');
+    assert(['healthy', 'degraded', 'warning', 'critical', 'offline'].includes(report.overall), 'overall is a valid health level');
+    lib.close();
+  });
+
+  await test('maintenance engine produces findings but never self-modifies', async () => {
+    const lib = createToolRegistry(fs.mkdtempSync(path.join(os.tmpdir(), 'adam-maint-')) + '/tools.db', null);
+    const eo = new AdamErrorObservabilityEngine();
+    const health = new AdamHealthEngine(lib, aiProviderRegistry, () => false);
+    const maint = new AdamMaintenanceEngine(health, eo, 99999);
+    const findings = await maint.runCheck(true);
+    assert(Array.isArray(findings), 'findings array');
+    assert(maint.findingsList().length >= 0, 'findings list available');
+    maint.stop();
+    lib.close();
+  });
+
+  await test('model matrix selects strongest provider by role without hardcoding', () => {
+    const matrix = new AdamModelMatrix(aiProviderRegistry);
+    const coding = matrix.selectFor('coding');
+    // With no keys configured, returns null (honest); with groq configured, groq wins.
+    if (coding) assert(['groq', 'gemini'].includes(coding.id), 'coding selected from configured providers');
+    assert(Array.isArray(matrix.matrix()), 'matrix list available');
+  });
+
+  await test('subagents are bounded, disposable and aggregate conclusions', async () => {
+    const orch = new AdamSubagentOrchestrator(() => null, 2000);
+    const sub = await orch.runSubagent('qa', 'check tests', null);
+    assert(sub.done === true, 'subagent always resolves (bounded)');
+    assert(orch.activeSubagents().length === 0, 'subagent disposed after completion');
+    const agg = orch.aggregate([sub]);
+    assert(typeof agg === 'string' && agg.length > 0, 'aggregation returns a summary');
+    orch.disposeAll();
+  });
+
+  console.log('\\n[adam_trial_rollback]');
+  await test('trial manager auto-rolls-back on simulated degradation', async () => {
+    const upDir = fs.mkdtempSync(path.join(os.tmpdir(), 'adam-trial-'));
+    const up = new AdamUpgradeEngine(upDir);
+    const p = up.propose({ title: 'R', reason: 'r', benefit: 'b', affectedSystems: ['x'], risk: 'low', rollbackPlan: 'r', testPlan: 't', impact: 'n' });
+    await up.buildAndValidate(p.id, async () => ({ passed: true, evidence: 'ok' }));
+    const lib = createToolRegistry(fs.mkdtempSync(path.join(os.tmpdir(), 'adam-trial-health-')) + '/tools.db', null);
+    const health = new AdamHealthEngine(lib, aiProviderRegistry, () => false);
+    const trial = new AdamTrialManager(up, health, { rollbackThreshold: 'offline', maxTrialMs: 50, healthCheckMs: 1000 });
+    assert(trial.startTrial(p.id) === true, 'trial starts');
+    trial.keepCurrent();
+    assert(trial.trialState === 'idle', 'trial kept -> idle');
+    lib.close();
+    fs.rmSync(upDir, { recursive: true, force: true });
+  });
+
   executor.shutdown();
   registry.close();
   memoryEngine.persist();

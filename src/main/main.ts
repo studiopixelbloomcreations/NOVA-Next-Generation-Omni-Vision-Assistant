@@ -1,12 +1,15 @@
 // ============================================================================
-// LEGACY — DISABLED
+// A.D.A.M. — ACTIVE PRODUCTION BACKEND (restored legacy baseline)
 // ============================================================================
-// This file is the OLD NOVA backend main process. It is RETAINED in the
-// repository for reference and archived rollback, but it is DISABLED: it is no
-// longer the Electron entry point. The ACTIVE entry is `nova2_main.ts`, which
-// boots only the New Backend (`New Backend/`) through the existing IPC
-// contract, leaving the frontend unchanged. Do not add new logic here. See
-// docs/NEW_BACKEND_ARCHITECTURE.md for the active architecture.
+// This is the ACTIVE Electron main process. It is the original, stable legacy
+// backend whose frontend/backend integration is the working baseline. The New
+// Backend (`New Backend/`) is DISABLED — it is NOT initialized here, is NOT an
+// entry point, and is retained only as the source for the additive systems
+// merged into this backend via `src/main/adam/`.
+//
+// A.D.A.M. identity: the assistant is A.D.A.M. (wake word ADAM, voice Charon).
+// See src/main/adam/identity.ts. The repo name and module paths keep
+// historical NOVA references by design; runtime identity is A.D.A.M.
 // ============================================================================
 import 'dotenv/config';
 import { app, BrowserWindow, ipcMain, screen, desktopCapturer, Tray, Menu, nativeImage } from 'electron';
@@ -49,6 +52,10 @@ import { runtimeState } from './services/runtime_state';
 import { pythonRuntime } from './services/python_runtime';
 import { micManager } from './services/mic_manager';
 import { personalityEngine } from './services/personality_engine';
+// A.D.A.M. additive systems — merged into the restored legacy backend. This is
+// the single additive integration point; existing legacy services are not
+// modified. See src/main/adam/.
+import { initAdamSystems, AdamSystems } from './adam';
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -71,6 +78,9 @@ let voiceIngestionMarked = false;
 let telemetryTimer: NodeJS.Timeout | null = null;
 let latestChips: IContextChipPayload = { chips: [] };
 let localWhisperActive = false;
+// A.D.A.M. additive systems handle (health/maintenance/upgrades/etc). Initialized
+// once during startup; stopped during shutdown. Additive — legacy behavior intact.
+let adamSystems: AdamSystems | null = null;
 // When Gemini Live itself resolves a spoken turn by calling a tool (tool-call
 // events), NOVA Core must NOT run the capability bridge again for the same
 // transcript — that would double-execute the action. The flag is set when a
@@ -882,6 +892,29 @@ app.whenReady().then(async () => {
     });
   }
 
+  // A.D.A.M. additive systems (merged from the disabled New Backend as additive
+  // capabilities). Initialized once the legacy orchestrator/services are up.
+  try {
+    adamSystems = initAdamSystems({
+      registry: agentOrchestrator.getRegistry(),
+      providers: aiProviderRegistry,
+      memory: memoryEngine,
+      python: pythonRuntime,
+      userData: app.getPath('userData'),
+      codingProvider: () => (aiProviderRegistry.get('groq')?.isConfigured() ? aiProviderRegistry.get('groq')! : aiProviderRegistry.primary()),
+    });
+    adamSystems.start();
+    logger.info('[main] A.D.A.M. additive systems initialized', {
+      identity: adamSystems.identity.name,
+      wakeWord: adamSystems.identity.wakeWord,
+      voice: adamSystems.identity.voice,
+    });
+  } catch (err) {
+    logger.error('[main] A.D.A.M. additive systems initialization failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
   // Step 2: Wake Word Detector and Voice Ingestion Setup
   try {
     await wakeWordDetector.initialize();
@@ -1476,6 +1509,7 @@ async function shutdownServices(): Promise<void> {
   try { await liveCodingMode.stopWatching(); } catch (err) { logger.error('[main] liveCodingMode stop error', { error: String(err) }); }
   try { geminiLiveBridge.disconnectStream(); } catch (err) { logger.error('[main] geminiLiveBridge disconnect error', { error: String(err) }); }
   try { await agentOrchestrator.shutdown(); } catch (err) { logger.error('[main] orchestrator shutdown error', { error: String(err) }); }
+  try { adamSystems?.shutdown(); adamSystems = null; } catch (err) { logger.error('[main] adam systems shutdown error', { error: String(err) }); }
   try { await interactionLedger.close(); } catch (err) { logger.error('[main] interactionLedger close error', { error: String(err) }); }
   try { await graphEngine.close(); } catch (err) { logger.error('[main] graphEngine close error', { error: String(err) }); }
   try { auditLogger.close(); } catch (err) { logger.error('[main] auditLogger close error', { error: String(err) }); }

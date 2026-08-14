@@ -1,14 +1,14 @@
 // ============================================================================
-// NOVA GENESIS — NEW BACKEND ELECTRON ENTRY (ACTIVE)
+// LEGACY NEW-ARCHITECTURE SOURCE — DISABLED
 // ============================================================================
-// This is the ACTIVE Electron main process that boots ONLY the New Backend
-// (New Backend/) and wires it to the EXISTING, UNCHANGED frontend through the
-// existing IPC contract. It does NOT import or initialize any legacy backend
-// service (src/main/services/*, the old orchestrator, task runner, etc.).
+// This was the Electron entry for the New Backend (New Backend/). It is now
+// DISABLED: the ACTIVE production entry is `src/main/main.ts`, which runs the
+// restored legacy backend (the working baseline) with the valuable systems
+// from the New Backend merged in additively via `src/main/adam/`.
 //
-// The legacy backend (src/main/main.ts and src/main/services/*) is retained in
-// the repository but DISABLED — it is no longer the entry point and never
-// starts. See docs/NEW_BACKEND_ARCHITECTURE.md.
+// The New Backend is not initialized here and is not an entry point. It is
+// retained as a reference/source for the merged additive systems. Do not
+// re-enable this as the entry point without a deliberate migration decision.
 // ============================================================================
 import 'dotenv/config';
 import { app, BrowserWindow, ipcMain } from 'electron';
