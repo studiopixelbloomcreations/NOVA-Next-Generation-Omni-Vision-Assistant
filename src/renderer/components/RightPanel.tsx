@@ -10,7 +10,7 @@ import {
 } from '../../shared/ipc_protocols';
 
 export interface ITranscriptEntry {
-  sender: 'USER' | 'NOVA AI';
+  sender: 'USER' | 'A.D.A.M. AI';
   text: string;
 }
 
@@ -234,7 +234,7 @@ export const RightPanel: React.FC<RightPanelProps> = ({
                     entry.sender === 'USER' ? 'text-[#00f0ff]' : 'text-[#d6e6ff]'
                   }`}
                 >
-                  {entry.sender}
+                  {entry.sender === 'NOVA AI' ? 'A.D.A.M. AI' : entry.sender}
                 </span>
                 <p
                   className={`font-rajdhani text-[11px] font-semibold leading-relaxed tracking-[0.02em] ${

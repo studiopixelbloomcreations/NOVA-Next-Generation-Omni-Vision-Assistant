@@ -1,68 +1,68 @@
 // src/shared/ipc_protocols.ts
 
-export enum NovaIpcChannel {
-  VOICE_STATE_CHANGE = 'nova-sys:voice-state-change',
-  HUD_VISIBILITY_REQ = 'nova-ui:hud-visibility-req',
-  CONTEXT_CHIP_UPDATE = 'nova-ui:context-chip-update',
-  TRIGGER_DOCKER_CMD = 'nova-act:trigger-docker-cmd',
-  USER_WAVEFORM_INPUT = 'nova-sys:user-waveform-input',
-  TRIGGER_AUTOMATION = 'nova-act:trigger-automation',
-  GET_KNOWLEDGE_NODES = 'nova-db:get-knowledge-nodes',
-  GET_LEDGER_ENTRIES = 'nova-db:get-ledger-entries',
-  SPEECH_TEXT_TRANSCRIBED = 'nova-sys:speech-text-transcribed',
-  ASK_QUESTION = 'nova-sys:ask-question',
-  AUDIO_BUFFER_FLUSH = 'nova-sys:audio-buffer-flush',
-  GEMINI_SETUP_COMPLETE = 'nova-sys:gemini-setup-complete',
-  MIC_AMPLITUDE_UPDATE = 'nova-sys:mic-amplitude-update',
-  SYSTEM_TELEMETRY = 'nova-sys:telemetry-update',
-  VECTOR_SEARCH = 'nova-db:vector-search',
-  DREAM_MODE_START = 'nova-sys:dream-mode-start',
-  DREAM_MODE_COMPLETE = 'nova-sys:dream-mode-complete',
-  MODE_CHANGED = 'nova-sys:mode-changed',
-  LIFE_REPLAY_TIMELINE = 'nova-labs:life-replay-timeline',
-  INTENT_PREDICTION = 'nova-labs:intent-prediction',
-  TOOL_REGISTRY_VIEW = 'nova-db:tool-registry-view',
-  TOOL_HEALTH_REPORT = 'nova-db:tool-health-report',
-  RUN_TOOL = 'nova-act:run-tool',
-  RUN_TASK = 'nova-act:run-task',
-  LIST_CAPABILITIES = 'nova-db:list-capabilities',
-  TOOL_TOGGLE = 'nova-db:tool-toggle',
-  SYSTEM_INFO_REQUEST = 'nova-sys:system-info',
-  CLIPBOARD_READ = 'nova-sys:clipboard-read',
-  CLIPBOARD_WRITE = 'nova-sys:clipboard-write',
-  AUDIT_RECENT = 'nova-db:audit-recent',
-  NOTIFY = 'nova-sys:notify',
-  MEMORY_SEARCH = 'nova-db:memory-search',
-  TOOL_APPROVE = 'nova-act:tool-approve',
-  TOOL_REJECT = 'nova-act:tool-reject',
-  TOOL_EXEC_LOG = 'nova-db:tool-exec-log',
-  GET_BOOT_STATE = 'nova-db:get-boot-state',
-  RUNTIME_STATE_CHANGE = 'nova-sys:runtime-state-change',
-  RUNTIME_ACTIVITY = 'nova-sys:runtime-activity',
-  GET_RUNTIME_STATE = 'nova-db:get-runtime-state',
+export enum AdamIpcChannel {
+  VOICE_STATE_CHANGE = 'adam-sys:voice-state-change',
+  HUD_VISIBILITY_REQ = 'adam-ui:hud-visibility-req',
+  CONTEXT_CHIP_UPDATE = 'adam-ui:context-chip-update',
+  TRIGGER_DOCKER_CMD = 'adam-act:trigger-docker-cmd',
+  USER_WAVEFORM_INPUT = 'adam-sys:user-waveform-input',
+  TRIGGER_AUTOMATION = 'adam-act:trigger-automation',
+  GET_KNOWLEDGE_NODES = 'adam-db:get-knowledge-nodes',
+  GET_LEDGER_ENTRIES = 'adam-db:get-ledger-entries',
+  SPEECH_TEXT_TRANSCRIBED = 'adam-sys:speech-text-transcribed',
+  ASK_QUESTION = 'adam-sys:ask-question',
+  AUDIO_BUFFER_FLUSH = 'adam-sys:audio-buffer-flush',
+  GEMINI_SETUP_COMPLETE = 'adam-sys:gemini-setup-complete',
+  MIC_AMPLITUDE_UPDATE = 'adam-sys:mic-amplitude-update',
+  SYSTEM_TELEMETRY = 'adam-sys:telemetry-update',
+  VECTOR_SEARCH = 'adam-db:vector-search',
+  DREAM_MODE_START = 'adam-sys:dream-mode-start',
+  DREAM_MODE_COMPLETE = 'adam-sys:dream-mode-complete',
+  MODE_CHANGED = 'adam-sys:mode-changed',
+  LIFE_REPLAY_TIMELINE = 'adam-labs:life-replay-timeline',
+  INTENT_PREDICTION = 'adam-labs:intent-prediction',
+  TOOL_REGISTRY_VIEW = 'adam-db:tool-registry-view',
+  TOOL_HEALTH_REPORT = 'adam-db:tool-health-report',
+  RUN_TOOL = 'adam-act:run-tool',
+  RUN_TASK = 'adam-act:run-task',
+  LIST_CAPABILITIES = 'adam-db:list-capabilities',
+  TOOL_TOGGLE = 'adam-db:tool-toggle',
+  SYSTEM_INFO_REQUEST = 'adam-sys:system-info',
+  CLIPBOARD_READ = 'adam-sys:clipboard-read',
+  CLIPBOARD_WRITE = 'adam-sys:clipboard-write',
+  AUDIT_RECENT = 'adam-db:audit-recent',
+  NOTIFY = 'adam-sys:notify',
+  MEMORY_SEARCH = 'adam-db:memory-search',
+  TOOL_APPROVE = 'adam-act:tool-approve',
+  TOOL_REJECT = 'adam-act:tool-reject',
+  TOOL_EXEC_LOG = 'adam-db:tool-exec-log',
+  GET_BOOT_STATE = 'adam-db:get-boot-state',
+  RUNTIME_STATE_CHANGE = 'adam-sys:runtime-state-change',
+  RUNTIME_ACTIVITY = 'adam-sys:runtime-activity',
+  GET_RUNTIME_STATE = 'adam-db:get-runtime-state',
   // Microphone
-  MIC_STATE_CHANGE = 'nova-sys:mic-state-change',
-  MIC_TOGGLE_REQUEST = 'nova-sys:mic-toggle-request',
-  MIC_TOGGLE = 'nova-act:mic-toggle',
-  MIC_DIAGNOSTIC = 'nova-db:mic-diagnostic',
-  MIC_DISCOVER = 'nova-db:mic-discover',
-  MIC_SET_MUTED = 'nova-act:mic-set-muted',
-  GET_MIC_STATE = 'nova-db:get-mic-state',
+  MIC_STATE_CHANGE = 'adam-sys:mic-state-change',
+  MIC_TOGGLE_REQUEST = 'adam-sys:mic-toggle-request',
+  MIC_TOGGLE = 'adam-act:mic-toggle',
+  MIC_DIAGNOSTIC = 'adam-db:mic-diagnostic',
+  MIC_DISCOVER = 'adam-db:mic-discover',
+  MIC_SET_MUTED = 'adam-act:mic-set-muted',
+  GET_MIC_STATE = 'adam-db:get-mic-state',
   // Renderer → main: explicit capture-state confirmation from the mic toggle.
   // Deliberately separate from `user-speaking-active` (VAD speech activity) so
   // a speech pause never flips the mic state machine to READY mid-capture.
-  MIC_CAPTURE_ACTIVE = 'nova-sys:mic-capture-active',
-  MIC_CAPTURE_ERROR = 'nova-sys:mic-capture-error',
-  // Workspace (internal NOVA surfaces)
-  WORKSPACE_UPDATE = 'nova-sys:workspace-update',
-  WORKSPACE_LIST = 'nova-db:workspace-list',
-  WORKSPACE_CLOSE = 'nova-act:workspace-close',
-  WORKSPACE_OPEN_URL = 'nova-act:workspace-open-url',
+  MIC_CAPTURE_ACTIVE = 'adam-sys:mic-capture-active',
+  MIC_CAPTURE_ERROR = 'adam-sys:mic-capture-error',
+  // Workspace (internal A.D.A.M. surfaces)
+  WORKSPACE_UPDATE = 'adam-sys:workspace-update',
+  WORKSPACE_LIST = 'adam-db:workspace-list',
+  WORKSPACE_CLOSE = 'adam-act:workspace-close',
+  WORKSPACE_OPEN_URL = 'adam-act:workspace-open-url',
 }
 
 /**
- * An internal NOVA workspace surface. Content stays inside the application
- * unless the user explicitly asks to open something outside NOVA.
+ * An internal A.D.A.M. workspace surface. Content stays inside the application
+ * unless the user explicitly asks to open something outside A.D.A.M.
  *
  * Conventions per type:
  *  - web | video : `source` is the http(s) URL rendered in a webview.
@@ -202,10 +202,10 @@ export interface ILiveStreamPayload {
   height?: string;
 }
 
-export type NovaVoiceState = 'IDLE' | 'LISTENING' | 'REASONING' | 'SPEAKING';
+export type AdamVoiceState = 'IDLE' | 'LISTENING' | 'REASONING' | 'SPEAKING';
 
 export interface IVoiceStatePayload {
-  currentState: NovaVoiceState;
+  currentState: AdamVoiceState;
   inputAmplitude: number;
   detectedSpeakerId?: string;
   streamLatencyMs: number;

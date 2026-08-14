@@ -112,7 +112,7 @@ export const LiveFeed: React.FC<LiveFeedProps> = ({ createdTools = [] }) => {
           NO ACTIVE STREAM
         </span>
         <span className="font-rajdhani text-[8px] text-[#ffffff20] uppercase mt-1 tracking-[0.1em]">
-          Ask NOVA to open a live feed
+          Ask A.D.A.M. to open a live feed
         </span>
       </div>
     );
